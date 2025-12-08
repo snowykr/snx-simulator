@@ -13,6 +13,11 @@ def format_trace_separator(reg_count: int = 4) -> str:
     return f"| --- | --------------- | {reg_seps} |"
 
 
-def format_trace_row(pc: int, inst_raw: str, regs: Sequence[int]) -> str:
-    reg_vals = " | ".join(f"{r:<3}" for r in regs)
+def format_trace_row(
+    pc: int, inst_raw: str, regs: Sequence[int], reg_initialized: Sequence[bool]
+) -> str:
+    reg_display = (
+        "*" if not reg_initialized[i] else str(regs[i]) for i in range(len(regs))
+    )
+    reg_vals = " | ".join(f"{val:<3}" for val in reg_display)
     return f"| {pc:<3} | {inst_raw:<15} | {reg_vals} |"

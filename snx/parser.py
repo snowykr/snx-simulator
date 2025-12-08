@@ -29,11 +29,22 @@ def parse_code(code_str: str) -> tuple[list[Instruction], dict[str, int]]:
         if not line:
             continue
 
-        parts = re.split(r"[,\s]+", line)
-        opcode = parts[0].upper()
-        operands = tuple(parts[1:])
+        opcode_parts = line.split(None, 1)
+        opcode = opcode_parts[0].upper()
+        operand_segment = opcode_parts[1] if len(opcode_parts) > 1 else ""
 
-        instructions.append(Instruction(opcode=opcode, operands=operands, raw=line))
+        operands: list[str] = []
+        if operand_segment:
+            for raw_operand in operand_segment.split(","):
+                sanitized = re.sub(r"\s+", "", raw_operand.strip())
+                if sanitized:
+                    operands.append(sanitized)
+
+        operands_tuple = tuple(operands)
+
+        instructions.append(
+            Instruction(opcode=opcode, operands=operands_tuple, raw=line)
+        )
         actual_line_idx += 1
 
     return instructions, labels

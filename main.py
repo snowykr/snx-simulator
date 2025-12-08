@@ -36,7 +36,8 @@ foo2:
 
 def main() -> None:
     def trace_printer(pc: int, inst_raw: str, regs: list[int]) -> None:
-        print(format_trace_row(pc, inst_raw, regs))
+        init_flags = sim.get_reg_init_flags()
+        print(format_trace_row(pc, inst_raw, regs, init_flags))
 
     sim = SNXSimulator(SAMPLE_PROGRAM, trace_callback=trace_printer)
 
