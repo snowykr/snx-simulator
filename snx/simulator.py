@@ -1,15 +1,22 @@
 from __future__ import annotations
 
-import re
 from typing import Callable
 
-from snx.parser import Instruction, parse_code
+from snx.ast import (
+    AddressOperand,
+    InstructionIR,
+    IRProgram,
+    LabelRefOperand,
+    Opcode,
+    RegisterOperand,
+)
+from snx.compiler import CompileResult, compile_program
 
 
 class SNXSimulator:
     def __init__(
         self,
-        code_str: str,
+        ir_program: IRProgram,
         *,
         reg_count: int = 4,
         mem_size: int = 128,
@@ -17,18 +24,41 @@ class SNXSimulator:
     ):
         self.regs: list[int] = [0] * reg_count
         self.memory: list[int] = [0] * mem_size
+        self._reg_count = reg_count
         self._reg_initialized: list[bool] = [False] * reg_count
         self._mem_initialized: list[bool] = [False] * mem_size
         self.pc: int = 0
         self.running: bool = True
 
         self._trace_callback = trace_callback
-        self._instructions: list[Instruction]
-        self._labels: dict[str, int]
-        self._instructions, self._labels = parse_code(code_str)
+        self._ir_program = ir_program
+        self._instructions = ir_program.instructions
+        self._labels = ir_program.labels
+
+    @classmethod
+    def from_source(
+        cls,
+        code_str: str,
+        *,
+        reg_count: int = 4,
+        mem_size: int = 128,
+        trace_callback: Callable[[int, str, list[int]], None] | None = None,
+    ) -> SNXSimulator:
+        result = compile_program(code_str, reg_count=reg_count)
+        if result.has_errors():
+            error_messages = "\n".join(str(d) for d in result.diagnostics)
+            raise ValueError(f"컴파일 오류:\n{error_messages}")
+        if result.ir is None:
+            raise ValueError("컴파일 결과가 없습니다.")
+        return cls(
+            result.ir,
+            reg_count=reg_count,
+            mem_size=mem_size,
+            trace_callback=trace_callback,
+        )
 
     @property
-    def instructions(self) -> list[Instruction]:
+    def instructions(self) -> tuple[InstructionIR, ...]:
         return self._instructions
 
     @property
@@ -42,19 +72,10 @@ class SNXSimulator:
             "running": self.running,
         }
 
-    def _get_reg_idx(self, reg_str: str) -> int:
-        return int(reg_str.replace("$", ""))
-
-    def _calc_effective_addr(self, addr_str: str) -> int:
-        match = re.match(r"(-?\d+)\((\$\d)\)", addr_str)
-        if match:
-            offset = int(match.group(1))
-            reg_idx = self._get_reg_idx(match.group(2))
-
-            # EA <- I + (Rb == $0)? 0 : Rb
-            base_val = 0 if reg_idx == 0 else self.regs[reg_idx]
-            return offset + base_val
-        raise ValueError(f"Invalid address format: {addr_str}")
+    def _calc_effective_addr(self, operand: AddressOperand) -> int:
+        base_idx = operand.base.index
+        base_val = 0 if base_idx == 0 else self.regs[base_idx]
+        return operand.offset + base_val
 
     def step(self) -> bool:
         if not self.running or self.pc >= len(self._instructions):
@@ -68,72 +89,89 @@ class SNXSimulator:
         self._execute(inst)
 
         if self._trace_callback:
-            self._trace_callback(current_pc, inst.raw, self.regs)
+            self._trace_callback(current_pc, inst.text, list(self.regs))
 
         return self.running
 
-    def _execute(self, inst: Instruction) -> None:
+    def _execute(self, inst: InstructionIR) -> None:
         op = inst.opcode
-        args = inst.operands
+        operands = inst.operands
 
-        if op == "LDA":
-            dest = self._get_reg_idx(args[0])
-            addr = self._calc_effective_addr(args[1])
-            self.regs[dest] = addr
-            self._reg_initialized[dest] = True
+        if op == Opcode.LDA:
+            dest = operands[0]
+            addr_op = operands[1]
+            if isinstance(dest, RegisterOperand) and isinstance(addr_op, AddressOperand):
+                addr = self._calc_effective_addr(addr_op)
+                self.regs[dest.index] = addr
+                self._reg_initialized[dest.index] = True
 
-        elif op == "LD":
-            dest = self._get_reg_idx(args[0])
-            addr = self._calc_effective_addr(args[1])
-            self.regs[dest] = self.memory[addr]
-            self._reg_initialized[dest] = True
+        elif op == Opcode.LD:
+            dest = operands[0]
+            addr_op = operands[1]
+            if isinstance(dest, RegisterOperand) and isinstance(addr_op, AddressOperand):
+                addr = self._calc_effective_addr(addr_op)
+                self.regs[dest.index] = self.memory[addr]
+                self._reg_initialized[dest.index] = True
 
-        elif op == "ST":
-            src = self._get_reg_idx(args[0])
-            addr = self._calc_effective_addr(args[1])
-            self.memory[addr] = self.regs[src]
-            self._mem_initialized[addr] = True
+        elif op == Opcode.ST:
+            src = operands[0]
+            addr_op = operands[1]
+            if isinstance(src, RegisterOperand) and isinstance(addr_op, AddressOperand):
+                addr = self._calc_effective_addr(addr_op)
+                self.memory[addr] = self.regs[src.index]
+                self._mem_initialized[addr] = True
 
-        elif op == "ADD":
-            dest = self._get_reg_idx(args[0])
-            val1 = self.regs[self._get_reg_idx(args[1])]
-            val2 = self.regs[self._get_reg_idx(args[2])]
-            self.regs[dest] = val1 + val2
-            self._reg_initialized[dest] = True
+        elif op == Opcode.ADD:
+            rd, rsa, rsb = operands[0], operands[1], operands[2]
+            if isinstance(rd, RegisterOperand) and isinstance(rsa, RegisterOperand) and isinstance(rsb, RegisterOperand):
+                self.regs[rd.index] = self.regs[rsa.index] + self.regs[rsb.index]
+                self._reg_initialized[rd.index] = True
 
-        elif op == "SLT":
-            dest = self._get_reg_idx(args[0])
-            val1 = self.regs[self._get_reg_idx(args[1])]
-            val2 = self.regs[self._get_reg_idx(args[2])]
-            self.regs[dest] = 1 if val1 < val2 else 0
-            self._reg_initialized[dest] = True
+        elif op == Opcode.AND:
+            rd, rsa, rsb = operands[0], operands[1], operands[2]
+            if isinstance(rd, RegisterOperand) and isinstance(rsa, RegisterOperand) and isinstance(rsb, RegisterOperand):
+                self.regs[rd.index] = self.regs[rsa.index] & self.regs[rsb.index]
+                self._reg_initialized[rd.index] = True
 
-        elif op == "BZ":
-            cond_reg = self._get_reg_idx(args[0])
-            label = args[1]
-            if self.regs[cond_reg] == 0:
-                if label not in self._labels:
-                    raise ValueError(f"Unknown label: {label}")
-                self.pc = self._labels[label]
+        elif op == Opcode.SLT:
+            rd, rsa, rsb = operands[0], operands[1], operands[2]
+            if isinstance(rd, RegisterOperand) and isinstance(rsa, RegisterOperand) and isinstance(rsb, RegisterOperand):
+                self.regs[rd.index] = 1 if self.regs[rsa.index] < self.regs[rsb.index] else 0
+                self._reg_initialized[rd.index] = True
 
-        elif op == "BAL":
-            link_reg = self._get_reg_idx(args[0])
-            next_pc = self.pc
+        elif op == Opcode.NOT:
+            rd, rs = operands[0], operands[1]
+            if isinstance(rd, RegisterOperand) and isinstance(rs, RegisterOperand):
+                self.regs[rd.index] = ~self.regs[rs.index]
+                self._reg_initialized[rd.index] = True
 
-            if args[1] in self._labels:
-                target_pc = self._labels[args[1]]
-            else:
-                target_pc = self._calc_effective_addr(args[1])
+        elif op == Opcode.SR:
+            rd, rs = operands[0], operands[1]
+            if isinstance(rd, RegisterOperand) and isinstance(rs, RegisterOperand):
+                self.regs[rd.index] = self.regs[rs.index] >> 1
+                self._reg_initialized[rd.index] = True
 
-            self.regs[link_reg] = next_pc
-            self._reg_initialized[link_reg] = True
-            self.pc = target_pc
+        elif op == Opcode.BZ:
+            cond_reg = operands[0]
+            label_op = operands[1]
+            if isinstance(cond_reg, RegisterOperand) and isinstance(label_op, LabelRefOperand):
+                if self.regs[cond_reg.index] == 0:
+                    self.pc = self._labels[label_op.name]
 
-        elif op == "HLT":
+        elif op == Opcode.BAL:
+            link_reg = operands[0]
+            target_op = operands[1]
+            if isinstance(link_reg, RegisterOperand):
+                self.regs[link_reg.index] = self.pc
+                self._reg_initialized[link_reg.index] = True
+
+                if isinstance(target_op, LabelRefOperand):
+                    self.pc = self._labels[target_op.name]
+                elif isinstance(target_op, AddressOperand):
+                    self.pc = self._calc_effective_addr(target_op)
+
+        elif op == Opcode.HLT:
             self.running = False
-
-        else:
-            raise ValueError(f"Unknown opcode: {op}")
 
     def get_reg_init_flags(self) -> tuple[bool, ...]:
         return tuple(self._reg_initialized)

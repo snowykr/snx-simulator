@@ -39,7 +39,7 @@ def main() -> None:
         init_flags = sim.get_reg_init_flags()
         print(format_trace_row(pc, inst_raw, regs, init_flags))
 
-    sim = SNXSimulator(SAMPLE_PROGRAM, trace_callback=trace_printer)
+    sim = SNXSimulator.from_source(SAMPLE_PROGRAM, trace_callback=trace_printer)
 
     print(format_trace_header())
     print(format_trace_separator())
