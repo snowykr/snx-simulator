@@ -260,21 +260,15 @@ def parse(source: str, diagnostics: DiagnosticCollector | None = None) -> ParseR
     return ParseResult(program=program, diagnostics=diagnostics.diagnostics)
 
 
-def parse_code(code_str: str) -> tuple[list[Instruction], dict[str, int]]:
-    from snx.analyzer import analyze
+def parse_code(code_str: str, *, reg_count: int = 4) -> tuple[list[Instruction], dict[str, int]]:
+    from snx.compiler import compile_program
 
-    diagnostics = DiagnosticCollector()
-    parse_result = parse(code_str, diagnostics)
+    result = compile_program(code_str, reg_count=reg_count)
 
-    if parse_result.program is None:
+    if result.ir is None:
         return [], {}
 
-    analysis_result = analyze(parse_result.program, diagnostics)
-
-    if analysis_result.ir is None:
-        return [], {}
-
-    ir = analysis_result.ir
+    ir = result.ir
     instructions: list[Instruction] = []
     for inst_ir in ir.instructions:
         operand_strs = tuple(op.text for op in inst_ir.operands)

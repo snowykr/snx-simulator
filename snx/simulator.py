@@ -162,13 +162,18 @@ class SNXSimulator:
             link_reg = operands[0]
             target_op = operands[1]
             if isinstance(link_reg, RegisterOperand):
-                self.regs[link_reg.index] = self.pc
-                self._reg_initialized[link_reg.index] = True
+                next_pc = self.pc
 
                 if isinstance(target_op, LabelRefOperand):
-                    self.pc = self._labels[target_op.name]
+                    target_pc = self._labels[target_op.name]
                 elif isinstance(target_op, AddressOperand):
-                    self.pc = self._calc_effective_addr(target_op)
+                    target_pc = self._calc_effective_addr(target_op)
+                else:
+                    target_pc = self.pc
+
+                self.regs[link_reg.index] = next_pc
+                self._reg_initialized[link_reg.index] = True
+                self.pc = target_pc
 
         elif op == Opcode.HLT:
             self.running = False

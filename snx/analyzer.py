@@ -49,6 +49,7 @@ class Analyzer:
         self._diagnostics = diagnostics
         self._reg_count = reg_count
         self._labels: dict[str, int] = {}
+        self._label_spans: dict[str, SourceSpan] = {}
         self._instructions: list[InstructionIR] = []
 
     def analyze(self) -> AnalysisResult:
@@ -78,17 +79,19 @@ class Analyzer:
             if line.label is not None:
                 label_name = line.label.name
                 if label_name in self._labels:
+                    prev_span = self._label_spans[label_name]
                     self._diagnostics.add_error(
                         "S006",
                         f"중복된 라벨 정의: '{line.label.original}'",
                         line.label.span,
                         (RelatedInfo(
-                            f"이전 정의 위치",
-                            SourceSpan(0, 0, 0, 0),
+                            "이전 정의 위치",
+                            prev_span,
                         ),),
                     )
                 else:
                     self._labels[label_name] = pc
+                    self._label_spans[label_name] = line.label.span
 
             if line.instruction is not None:
                 pc += 1
