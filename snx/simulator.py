@@ -47,9 +47,9 @@ class SNXSimulator:
         result = compile_program(code_str, reg_count=reg_count)
         if result.has_errors():
             error_messages = "\n".join(str(d) for d in result.diagnostics)
-            raise ValueError(f"컴파일 오류:\n{error_messages}")
+            raise ValueError(f"Compilation error:\n{error_messages}")
         if result.ir is None:
-            raise ValueError("컴파일 결과가 없습니다.")
+            raise ValueError("Compilation produced no result.")
         return cls(
             result.ir,
             reg_count=reg_count,

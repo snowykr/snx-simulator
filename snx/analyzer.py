@@ -82,10 +82,10 @@ class Analyzer:
                     prev_span = self._label_spans[label_name]
                     self._diagnostics.add_error(
                         "S006",
-                        f"중복된 라벨 정의: '{line.label.original}'",
+                        f"Duplicate label definition: '{line.label.original}'",
                         line.label.span,
                         (RelatedInfo(
-                            "이전 정의 위치",
+                            "Previous definition",
                             prev_span,
                         ),),
                     )
@@ -135,7 +135,7 @@ class Analyzer:
             self._diagnostics.add_line_error(
                 line_no,
                 "S002",
-                f"'{inst.opcode.name}' 명령어는 {expected_count}개의 피연산자가 필요하지만 {actual_count}개가 제공되었습니다.",
+                f"'{inst.opcode.name}' requires {expected_count} operand(s), but {actual_count} provided.",
                 inst.span,
             )
             return
@@ -143,11 +143,11 @@ class Analyzer:
         for i, (operand, expected_type) in enumerate(zip(inst.operands, expected_types)):
             if isinstance(expected_type, tuple):
                 if not isinstance(operand, expected_type):
-                    type_names = " 또는 ".join(t.__name__ for t in expected_type)
+                    type_names = " or ".join(t.__name__ for t in expected_type)
                     self._diagnostics.add_line_error(
                         line_no,
                         "S003",
-                        f"'{inst.opcode.name}' 명령어의 {i+1}번째 피연산자는 {type_names} 타입이어야 합니다.",
+                        f"Operand {i+1} of '{inst.opcode.name}' must be of type {type_names}.",
                         operand.span,
                     )
             else:
@@ -155,7 +155,7 @@ class Analyzer:
                     self._diagnostics.add_line_error(
                         line_no,
                         "S003",
-                        f"'{inst.opcode.name}' 명령어의 {i+1}번째 피연산자는 {expected_type.__name__} 타입이어야 합니다.",
+                        f"Operand {i+1} of '{inst.opcode.name}' must be of type {expected_type.__name__}.",
                         operand.span,
                     )
 
@@ -166,7 +166,7 @@ class Analyzer:
                     self._diagnostics.add_line_error(
                         line_no,
                         "S005",
-                        f"레지스터 인덱스가 범위를 벗어났습니다: {operand.text} (유효 범위: $0-${self._reg_count - 1})",
+                        f"Register index out of range: {operand.text} (valid: $0-${self._reg_count - 1})",
                         operand.span,
                     )
             elif isinstance(operand, AddressOperand):
@@ -174,7 +174,7 @@ class Analyzer:
                     self._diagnostics.add_line_error(
                         line_no,
                         "S005",
-                        f"레지스터 인덱스가 범위를 벗어났습니다: {operand.base.text} (유효 범위: $0-${self._reg_count - 1})",
+                        f"Register index out of range: {operand.base.text} (valid: $0-${self._reg_count - 1})",
                         operand.base.span,
                     )
 
@@ -185,7 +185,7 @@ class Analyzer:
                     self._diagnostics.add_line_error(
                         line_no,
                         "S004",
-                        f"정의되지 않은 라벨: '{operand.original}'",
+                        f"Undefined label: '{operand.original}'",
                         operand.span,
                     )
 

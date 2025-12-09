@@ -105,7 +105,7 @@ class DiagnosticCollector:
             primary = self._line_primary[line]
             related = (
                 RelatedInfo(
-                    message=f"이 오류는 같은 줄의 이전 오류({primary.code})의 영향일 수 있습니다.",
+                    message=f"This error may be caused by a previous error ({primary.code}) on the same line.",
                     span=primary.span,
                 ),
             )

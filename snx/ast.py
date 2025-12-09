@@ -59,6 +59,7 @@ class LabelRefOperand(Operand):
     original: str
 
 
+# not in use for now
 @dataclass(frozen=True, slots=True)
 class ImmediateOperand(Operand):
     value: int

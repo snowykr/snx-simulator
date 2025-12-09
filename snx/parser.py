@@ -120,7 +120,7 @@ class Parser:
             self._diagnostics.add_line_error(
                 opcode_tok.line,
                 "S001",
-                f"알 수 없는 명령어: '{opcode_tok.lexeme}'",
+                f"Unknown instruction: '{opcode_tok.lexeme}'",
                 opcode_tok.span,
             )
 
@@ -178,7 +178,7 @@ class Parser:
             self._diagnostics.add_line_error(
                 tok.line,
                 "P003",
-                f"예상치 못한 토큰: '{tok.lexeme}'",
+                f"Unexpected token: '{tok.lexeme}'",
                 tok.span,
             )
             self._advance()
@@ -193,7 +193,7 @@ class Parser:
             self._diagnostics.add_line_error(
                 tok.line,
                 "P004",
-                f"잘못된 레지스터 형식: '{tok.lexeme}'",
+                f"Invalid register format: '{tok.lexeme}'",
                 tok.span,
             )
         return RegisterOperand(text=tok.lexeme, span=tok.span, index=index)
@@ -207,11 +207,11 @@ class Parser:
             self._diagnostics.add_line_error(
                 offset_tok.line,
                 "P005",
-                f"잘못된 오프셋 형식: '{offset_tok.lexeme}'",
+                f"Invalid offset format: '{offset_tok.lexeme}'",
                 offset_tok.span,
             )
 
-        if not self._consume(TokenKind.LPAREN, "P002", "'(' 가 필요합니다."):
+        if not self._consume(TokenKind.LPAREN, "P002", "'(' is required."):
             span = SourceSpan(offset_tok.line, offset_tok.column, offset_tok.line, offset_tok.column + len(offset_tok.lexeme))
             base = RegisterOperand(text="$0", span=span, index=0)
             return AddressOperand(text=offset_tok.lexeme, span=span, offset=offset, base=base)
@@ -221,7 +221,7 @@ class Parser:
             self._diagnostics.add_line_error(
                 tok.line,
                 "P006",
-                "레지스터가 필요합니다.",
+                "Register is required.",
                 tok.span,
             )
             span = SourceSpan(offset_tok.line, offset_tok.column, tok.line, tok.column)
@@ -231,7 +231,7 @@ class Parser:
         base = self._parse_register_operand()
 
         rparen_tok = self._current()
-        if not self._consume(TokenKind.RPAREN, "P002", "')' 가 필요합니다."):
+        if not self._consume(TokenKind.RPAREN, "P002", "')' is required."):
             pass
 
         text = f"{offset_tok.lexeme}({base.text})"

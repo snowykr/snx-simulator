@@ -128,7 +128,7 @@ class Tokenizer:
         start_col = self._col
         self._advance()
         span = SourceSpan(self._line, start_col, self._line, start_col + 1)
-        self._diagnostics.add_error("L001", f"잘못된 문자: '{ch}'", span)
+        self._diagnostics.add_error("L001", f"Invalid character: '{ch}'", span)
 
     def _scan_register(self) -> None:
         start_col = self._col
@@ -136,7 +136,7 @@ class Tokenizer:
 
         if not self._peek().isdigit():
             span = SourceSpan(self._line, start_col, self._line, self._col)
-            self._diagnostics.add_error("L002", "레지스터 번호가 필요합니다.", span)
+            self._diagnostics.add_error("L002", "Register number is required.", span)
             self._add_token(TokenKind.REGISTER, lexeme, lexeme.upper())
             return
 
