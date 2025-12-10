@@ -2,7 +2,9 @@
 
 ## Overview
 
-SN-X Simulator is a CPU simulator implementing the SN/X architecture in Python.
+SN-X Simulator is a Python toolchain (assembler, static analyzer, and simulator) for the **SN/X architecture**, a 16-bit educational RISC processor designed by **Naohiko Shimizu**.
+
+This document includes a concise technical summary of the SN/X architecture and this Python implementation.
 
 ## Requirements
 
@@ -119,12 +121,71 @@ sim.run()
 print(f"Final registers: {sim.regs}")
 ```
 
-## Architecture and Instruction Summary
+## SN/X Architecture Overview
 
-- **Registers**: `$0`–`$3`. Register `$0` is treated as zero when used as a base in address calculations.
-- **Memory**: A fixed 128-word array.
-- **Instructions**: Supports `LDA`, `LD`, `ST`, `ADD`, `AND`, `SLT`, `NOT`, `SR`, `BZ`, `BAL`, `HLT`.
-- **Trace**: Each step outputs PC, instruction, and register state in a table format.
+SN/X (Simple 16-bit Non-Pipeline Processor) is a strictly 16-bit RISC processor designed for educational purposes.
+
+### Key Specifications
+
+- **Designer:** Naohiko Shimizu
+- **Data Width:** 16-bit
+- **Address Space:** 16-bit (2^16 words) for both Instruction Memory (IMEM) and Data Memory (DMEM)
+- **Addressing:** Word addressing (address increment of 1 = 16-bit move)
+- **Registers:** 4 General Purpose Registers (16-bit): `$0`, `$1`, `$2`, `$3`
+  - **Note:** `$0` can store values like any other register, but when used as a **base register** in memory addressing (e.g., `LD $1, 10($0)`), it is treated as constant `0`. This means `Imm($0)` becomes an absolute address.
+- **Pipeline:** Non-pipelined (sequential execution)
+- **PC:** 16-bit Program Counter (not directly accessible by programmer)
+
+### Instruction Formats
+
+All instructions are 16-bit fixed length.
+
+| Type | Assembly | Bit Layout (15→0) |
+|------|----------|-------------------|
+| **R** | `OP R1, R2, R3` | `OP(4) \| Src1(2) \| Src2(2) \| Dest(2) \| Unused(6)` |
+| **R1** | `OP R1, R2` | `OP(4) \| Src(2) \| Unused(2) \| Dest(2) \| Unused(6)` |
+| **R0** | `OP` | `OP(4) \| Unused(12)` |
+| **I** | `OP R1, Imm(R2)` | `OP(4) \| Dest(2) \| Base(2) \| Imm(8)` |
+
+### Full Instruction Set
+
+| Opcode | Mnemonic | Type | Operation |
+|:------:|:---------|:----:|:----------|
+| `0x0` | **ADD** | R | `R1 = R2 + R3` |
+| `0x1` | **AND** | R | `R1 = R2 & R3` |
+| `0x2` | **SUB** | R | `R1 = R2 - R3` |
+| `0x3` | **SLT** | R | `R1 = (R2 < R3) ? 1 : 0` |
+| `0x4` | **NOT** | R1 | `R1 = ~R2` |
+| `0x6` | **SR** | R1 | `R1 = R2 >> 1` |
+| `0x7` | **HLT** | R0 | Halt processor |
+| `0x8` | **LD** | I | `R1 = MEM[Base + Imm]` |
+| `0x9` | **ST** | I | `MEM[Base + Imm] = R1` |
+| `0xA` | **LDA** | I | `R1 = Base + Imm` (load address / immediate) |
+| `0xC` | **IN** | I | `R1 = Input_Port` |
+| `0xD` | **OUT** | I | `Output_Port = R1` |
+| `0xE` | **BZ** | I | `if (R1 == 0) PC = PC + Imm` (branch if zero) |
+| `0xF` | **BAL** | I | `R1 = PC + 1; PC = PC + Imm` (branch and link) |
+
+**Branch Instructions:**
+- **BZ:** Branches to target label if the condition register equals zero.
+- **BAL:** Saves return address (`PC + 1`) into link register, then jumps to target. Used for function calls; return is typically `BAL $x, 0($link_reg)`.
+
+### Simulator Implementation Status
+
+This simulator currently implements the following instructions:
+
+`ADD`, `AND`, `SLT`, `NOT`, `SR`, `LDA`, `LD`, `ST`, `BZ`, `BAL`, `HLT`
+
+**Not yet implemented:** `SUB`, `IN`, `OUT`
+
+### Memory in This Simulator
+
+- **Architecture spec:** 2^16 words each for IMEM and DMEM.
+- **Simulator default:** 128-word data memory (`DEFAULT_MEM_SIZE`). Configurable via `mem_size` parameter.
+
+### Trace Output
+
+Each simulation step outputs PC, instruction text, and register state in a table format.
 
 ## SN/X Assembly Syntax
 
