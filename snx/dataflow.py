@@ -13,7 +13,6 @@ from snx.ast import (
     RegisterOperand,
 )
 from snx.cfg import CFG, build_cfg
-from snx.diagnostics import SourceSpan
 
 if TYPE_CHECKING:
     pass
@@ -40,14 +39,12 @@ class AbstractState:
     registers: dict[int, ValueState] = field(default_factory=dict)
     stack_slots: dict[int, ValueState] = field(default_factory=dict)
     sp_offset: int = 0
-    call_depth: int = 0
     
     def copy(self) -> AbstractState:
         return AbstractState(
             registers=dict(self.registers),
             stack_slots=dict(self.stack_slots),
             sp_offset=self.sp_offset,
-            call_depth=self.call_depth,
         )
     
     def merge_with(self, other: AbstractState) -> AbstractState:
@@ -66,7 +63,6 @@ class AbstractState:
             result.stack_slots[slot] = self_state.merge_with(other_state)
         
         result.sp_offset = max(self.sp_offset, other.sp_offset)
-        result.call_depth = max(self.call_depth, other.call_depth)
         
         return result
     
@@ -110,7 +106,6 @@ class DataflowAnalyzer:
         self._inst_by_pc: dict[int, InstructionIR] = {
             inst.pc: inst for inst in ir_program.instructions
         }
-        self._inst_spans: dict[int, SourceSpan] = {}
         
     def analyze(self) -> DataflowResult:
         if not self._ir_program.instructions:
