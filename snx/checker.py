@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from snx.ast import IRProgram, Program, Line
+from snx.ast import IRProgram, Program
 from snx.cfg import (
     CFG,
     build_cfg,
@@ -17,7 +17,6 @@ from snx.dataflow import (
 from snx.diagnostics import (
     Diagnostic,
     DiagnosticCollector,
-    RelatedInfo,
     Severity,
     SourceSpan,
 )

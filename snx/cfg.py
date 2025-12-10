@@ -10,7 +10,6 @@ from snx.ast import (
     IRProgram,
     LabelRefOperand,
     Opcode,
-    RegisterOperand,
 )
 
 if TYPE_CHECKING:

@@ -13,7 +13,7 @@ from snx.ast import (
     RegisterOperand,
 )
 from snx.cfg import CFG, build_cfg
-from snx.diagnostics import DiagnosticCollector, SourceSpan, RelatedInfo
+from snx.diagnostics import SourceSpan
 
 if TYPE_CHECKING:
     pass

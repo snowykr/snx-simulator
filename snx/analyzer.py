@@ -9,9 +9,7 @@ from snx.ast import (
     InstructionNode,
     IRProgram,
     LabelRefOperand,
-    Line,
     Opcode,
-    Operand,
     Program,
     RegisterOperand,
 )
