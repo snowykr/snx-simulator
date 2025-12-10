@@ -27,10 +27,61 @@ SN-X Simulator is a CPU simulator implementing the SN/X architecture in Python.
 
 ## Running the Sample Program
 
-Run the main script to execute a sample assembly program and view the trace table:
+Run the main script to run static analysis and, if there are no errors, execute a sample assembly program and view the trace table:
 ```bash
 uv run python main.py
 ```
+
+The script will first print the static analysis result (errors and warnings). If any errors are reported, execution is aborted before the simulator runs.
+
+## Static Analysis and Diagnostics
+
+The SN-X toolchain performs several static checks before executing a program, similar in spirit to `go build` or `cargo check`:
+
+- **Syntax and basic semantics**: unknown instructions, invalid operand counts/types, register index bounds, undefined or duplicate labels.
+- **Control-flow analysis (CFG)**: builds a control-flow graph to identify unreachable code and certain obvious infinite loops (regions of code with no path to `HLT`).
+- **Dataflow analysis**: tracks initialization state of registers/memory and return-address usage to detect:
+  - reads from uninitialized or potentially uninitialized memory,
+  - return jumps that do not use a valid return address.
+
+These checks are integrated into the compiler and simulator:
+
+- `compile_program(source: str, *, reg_count: int = 4, run_static_checks: bool = True)`
+  - parses and analyzes the source program,
+  - runs static analysis by default,
+  - returns a `CompileResult` containing:
+    - `program`: high-level AST (`Program`) or `None` on failure,
+    - `ir`: lowered `IRProgram` or `None` if analysis failed,
+    - `diagnostics`: list of all errors and warnings,
+    - `cfg`: the control-flow graph (when static checks are enabled),
+    - `dataflow`: dataflow analysis result (when static checks are enabled).
+  - helper methods:
+    - `has_errors()` / `has_warnings()`
+    - `format_diagnostics()` to pretty-print diagnostics.
+
+Example: running static checks from Python without executing the simulator:
+
+```python
+from snx import compile_program
+
+source = """
+main:
+    LDA $3, 64($0)
+    LDA $1, 3($0)
+    BAL $2, foo
+    HLT
+foo:
+    HLT
+"""
+
+result = compile_program(source)
+
+print(result.format_diagnostics())
+if result.has_errors():
+    raise SystemExit(1)
+```
+
+- `SNXSimulator.from_source(source: str, ...)` internally uses `compile_program` with static checks enabled and raises `ValueError` if compilation or static analysis reports any errors.
 
 ## Architecture and Instruction Summary
 

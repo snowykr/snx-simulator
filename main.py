@@ -1,4 +1,6 @@
-from snx import SNXSimulator
+import sys
+
+from snx import SNXSimulator, compile_program
 from snx.trace import format_trace_header, format_trace_row, format_trace_separator
 
 SAMPLE_PROGRAM = """
@@ -34,16 +36,34 @@ foo2:
 
 
 def main() -> None:
+    result = compile_program(SAMPLE_PROGRAM)
+    
+    print("=== Static Analysis Result ===")
+    print(result.format_diagnostics())
+    print()
+    
+    if result.has_errors():
+        print("Build failed due to errors above.")
+        sys.exit(1)
+    
+    if result.has_warnings():
+        print("Build succeeded with warnings.")
+        print()
+    
     def trace_printer(pc: int, inst_raw: str, regs: list[int]) -> None:
         init_flags = sim.get_reg_init_flags()
         print(format_trace_row(pc, inst_raw, regs, init_flags))
 
     sim = SNXSimulator.from_source(SAMPLE_PROGRAM, trace_callback=trace_printer)
 
+    print("=== Execution Trace ===")
     print(format_trace_header())
     print(format_trace_separator())
 
     sim.run()
+    
+    print()
+    print("=== Execution completed successfully ===")
 
 
 if __name__ == "__main__":
