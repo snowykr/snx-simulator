@@ -1,8 +1,8 @@
-# SN-X Simulator
+# SN/X Simulator
 
 ## Overview
 
-SN-X Simulator is a Python toolchain (assembler, static analyzer, and simulator) for the **SN/X architecture**, a 16-bit educational RISC processor designed by **Naohiko Shimizu**.
+SN/X Simulator is a Python toolchain (assembler, static analyzer, and simulator) for the **SN/X architecture**, a 16-bit educational RISC processor designed by **Naohiko Shimizu**.
 
 This document includes a concise technical summary of the SN/X architecture and this Python implementation.
 
@@ -90,7 +90,7 @@ The command will:
 
 ## Static Analysis and Diagnostics
 
-The SN-X toolchain performs several static checks before executing a program, similar in spirit to `go build` or `cargo check`:
+The SN/X toolchain performs several static checks before executing a program, similar in spirit to `go build` or `cargo check`:
 
 - **Syntax and basic semantics**: unknown instructions, invalid operand counts/types, register index bounds, undefined or duplicate labels.
 - **Memory bounds checking**: absolute addresses (`base == $0`) that exceed `mem_size` are flagged as errors (code `M001`).
