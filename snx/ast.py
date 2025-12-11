@@ -11,15 +11,18 @@ if TYPE_CHECKING:
 class Opcode(Enum):
     ADD = auto()
     AND = auto()
+    SUB = auto()
     SLT = auto()
     NOT = auto()
     SR = auto()
-    LDA = auto()
+    HLT = auto()
     LD = auto()
     ST = auto()
+    LDA = auto()
+    IN = auto()
+    OUT = auto()
     BZ = auto()
     BAL = auto()
-    HLT = auto()
 
     @classmethod
     def from_str(cls, s: str) -> Opcode | None:

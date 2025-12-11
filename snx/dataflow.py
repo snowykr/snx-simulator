@@ -14,6 +14,7 @@ from snx.ast import (
 )
 from snx.cfg import CFG, build_cfg
 from snx.constants import DEFAULT_REG_COUNT
+from snx.word import normalize_imm8
 
 if TYPE_CHECKING:
     pass
@@ -187,7 +188,7 @@ class DataflowAnalyzer:
                 out_state.registers[dest.index] = ValueState.DATA
                 if dest.index == 3 and isinstance(addr_op, AddressOperand):
                     if addr_op.base.index == 3:
-                        out_state.sp_offset += addr_op.offset
+                        out_state.sp_offset += normalize_imm8(addr_op.offset)
             successors.append(pc + 1)
             
         elif opcode == Opcode.LD:
@@ -231,7 +232,7 @@ class DataflowAnalyzer:
                     out_state.stack_slots[slot_key] = src_state
             successors.append(pc + 1)
             
-        elif opcode in (Opcode.ADD, Opcode.AND, Opcode.SLT):
+        elif opcode in (Opcode.ADD, Opcode.AND, Opcode.SUB, Opcode.SLT):
             dest = operands[0]
             if isinstance(dest, RegisterOperand):
                 out_state.registers[dest.index] = ValueState.DATA
@@ -241,6 +242,15 @@ class DataflowAnalyzer:
             dest = operands[0]
             if isinstance(dest, RegisterOperand):
                 out_state.registers[dest.index] = ValueState.DATA
+            successors.append(pc + 1)
+            
+        elif opcode == Opcode.IN:
+            dest = operands[0]
+            if isinstance(dest, RegisterOperand):
+                out_state.registers[dest.index] = ValueState.DATA
+            successors.append(pc + 1)
+            
+        elif opcode == Opcode.OUT:
             successors.append(pc + 1)
             
         elif opcode == Opcode.BZ:
@@ -305,10 +315,11 @@ class DataflowAnalyzer:
         return out_state, successors
     
     def _get_stack_slot_key(self, addr_op: AddressOperand, state: AbstractState) -> int | None:
+        eff_offset = normalize_imm8(addr_op.offset)
         if addr_op.base.index == 3:
-            return state.sp_offset + addr_op.offset
+            return state.sp_offset + eff_offset
         elif addr_op.base.index == 0:
-            return 1000 + addr_op.offset
+            return 1000 + eff_offset
         return None
 
 

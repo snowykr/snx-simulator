@@ -114,6 +114,15 @@ class DiagnosticCollector:
             self._line_primary[line] = diag
         return diag
 
+    def add_line_warning(
+        self,
+        line: int,
+        code: str,
+        message: str,
+        span: SourceSpan,
+    ) -> Diagnostic:
+        return self.add_warning(code, message, span)
+
     def get_line_primary(self, line: int) -> Diagnostic | None:
         return self._line_primary.get(line)
 
