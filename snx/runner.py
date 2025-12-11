@@ -1,41 +1,15 @@
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
 from snx.compiler import compile_program
 from snx.simulator import SNXSimulator
 from snx.trace import format_trace_header, format_trace_row, format_trace_separator
 
-SAMPLE_PROGRAM = """
-main:
-    LDA $3, 64($0)
-    LDA $1, 3($0)
-    BAL $2, foo
-    HLT
-foo:
-    LDA $3, 254($3)
-    ST  $2, 0($3)
-    ST  $1, 1($3)
-    LDA $0, 2($0)
-    SLT $0, $1, $0
-    BZ  $0, foo2
-foo1:
-    LD  $2, 0($3)
-    LDA $3, 2($3)
-    BAL $2, 0($2)
-foo2:
-    LDA $1, 255($1)
-    BAL $2, foo
-    LDA $3, 255($3)
-    ST  $1, 0($3)
-    LD  $1, 2($3)
-    LDA $1, 254($1)
-    BAL $2, foo
-    LD  $2, 0($3)
-    LDA $3, 1($3)
-    ADD $1, $1, $2
-    BAL $0, foo1
-"""
 
-
-def run_sample_program() -> int:
-    result = compile_program(SAMPLE_PROGRAM)
+def run_program_from_source(source: str, *, label: str | None = None) -> int:
+    result = compile_program(source)
 
     print("=== Static Analysis Result ===")
     print(result.format_diagnostics())
@@ -67,3 +41,26 @@ def run_sample_program() -> int:
     print()
     print("=== Execution completed successfully ===")
     return 0
+
+
+def run_program_from_file(path: Path | str) -> int:
+    path = Path(path).expanduser()
+
+    if not path.exists():
+        print(f"error: file '{path}' not found", file=sys.stderr)
+        return 1
+
+    if not path.is_file():
+        print(f"error: '{path}' is not a file", file=sys.stderr)
+        return 1
+
+    try:
+        source = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError as e:
+        print(f"error: failed to read '{path}': {e}", file=sys.stderr)
+        return 1
+    except OSError as e:
+        print(f"error: failed to read '{path}': {e}", file=sys.stderr)
+        return 1
+
+    return run_program_from_source(source, label=str(path))
