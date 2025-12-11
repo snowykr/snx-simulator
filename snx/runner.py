@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 
 from snx.compiler import CompileResult, compile_program
-from snx.diagnostics import Severity
+from snx.diagnostics import Severity, SourceSpan
 from snx.simulator import SNXSimulator
 from snx.trace import format_trace_header, format_trace_row, format_trace_separator
 
@@ -17,7 +17,7 @@ def _format_diagnostics_with_label(result: CompileResult, label: str | None) -> 
     errors = [d for d in result.diagnostics if d.severity == Severity.ERROR]
     warnings = [d for d in result.diagnostics if d.severity == Severity.WARNING]
 
-    def format_location(span: object) -> str:
+    def format_location(span: SourceSpan) -> str:
         if label is not None:
             return f"{label}:{span}"
         return str(span)
