@@ -204,6 +204,20 @@ This means:
 - **Programs must be fewer than 1024 instructions** for branch encoding to work correctly.
 - This Python implementation follows the same encoding scheme for compatibility with snxasm-generated binaries.
 
+**Behavior for programs with 1024+ instructions:**
+
+This implementation produces **identical binary output** to snxasm, even when branch targets exceed the 10-bit limit. When a branch target label has PC ≥ 1024:
+- The encoding adds the full target PC to the instruction word, then masks to 16 bits.
+- This causes the upper bits of the target PC to overflow into the opcode/register fields, corrupting the instruction—exactly as snxasm does.
+
+The static analyzer issues warning **B001** when this occurs:
+```
+[B001] warning: Branch target 'label' has PC 1024, which exceeds the 10-bit branch field limit (0-1023);
+       encoding will overflow into opcode/register bits (matching original snxasm behavior)
+```
+
+This warning alerts you to the encoding corruption while preserving full compatibility with legacy snxasm binaries.
+
 ### Simulator Implementation Status
 
 This simulator implements the **complete SN/X instruction set**:

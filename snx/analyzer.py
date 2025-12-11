@@ -121,6 +121,7 @@ class Analyzer:
             self._check_operand_spec(inst, line.line_no)
             self._check_register_bounds(inst, line.line_no)
             self._check_label_refs(inst, line.line_no)
+            self._check_branch_target_range(inst, line.line_no)
             self._check_memory_bounds(inst, line.line_no)
             self._check_immediate_range(inst, line.line_no)
 
@@ -201,6 +202,28 @@ class Analyzer:
                         f"Undefined label: '{operand.original}'",
                         operand.span,
                     )
+
+    def _check_branch_target_range(self, inst: InstructionNode, line_no: int) -> None:
+        if inst.opcode not in (Opcode.BZ, Opcode.BAL):
+            return
+
+        for operand in inst.operands:
+            if not isinstance(operand, LabelRefOperand):
+                continue
+
+            if operand.name not in self._labels:
+                continue
+
+            target_pc = self._labels[operand.name]
+            if target_pc >= 1024:
+                self._diagnostics.add_line_warning(
+                    line_no,
+                    "B001",
+                    f"Branch target '{operand.original}' has PC {target_pc}, which exceeds "
+                    f"the 10-bit branch field limit (0-1023); encoding will overflow into "
+                    f"opcode/register bits (matching original snxasm behavior)",
+                    operand.span,
+                )
 
     def _check_memory_bounds(self, inst: InstructionNode, line_no: int) -> None:
         if inst.opcode not in (Opcode.LD, Opcode.ST):

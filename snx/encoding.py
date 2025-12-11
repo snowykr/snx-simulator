@@ -10,7 +10,7 @@ from snx.ast import (
     Opcode,
     RegisterOperand,
 )
-from snx.word import IMM8_MASK
+from snx.word import IMM8_MASK, word
 
 if TYPE_CHECKING:
     pass
@@ -112,10 +112,10 @@ def encode_instruction(inst: InstructionIR, labels: dict[str, int]) -> int:
         if not (isinstance(cond_reg, RegisterOperand) and isinstance(label_op, LabelRefOperand)):
             raise EncodingError(f"Invalid operands for BZ instruction: {inst.text}")
         label_pc = labels.get(label_op.name, 0)
-        return (
-            (op_int << 12) |
-            (cond_reg.index << 10) |
-            (label_pc & LABEL_PC_MASK)
+        return word(
+            (op_int << 12) +
+            (cond_reg.index << 10) +
+            label_pc
         )
 
     elif opcode == Opcode.BAL:
@@ -126,10 +126,10 @@ def encode_instruction(inst: InstructionIR, labels: dict[str, int]) -> int:
 
         if isinstance(target_op, LabelRefOperand):
             label_pc = labels.get(target_op.name, 0)
-            return (
-                (op_int << 12) |
-                (link_reg.index << 10) |
-                (label_pc & LABEL_PC_MASK)
+            return word(
+                (op_int << 12) +
+                (link_reg.index << 10) +
+                label_pc
             )
         elif isinstance(target_op, AddressOperand):
             imm8 = target_op.offset & IMM8_MASK
@@ -150,8 +150,8 @@ def encode_program(ir_program: IRProgram) -> tuple[int, ...]:
     labels = ir_program.labels
     result: list[int] = []
     for inst in ir_program.instructions:
-        word = encode_instruction(inst, labels)
-        result.append(word)
+        encoded = encode_instruction(inst, labels)
+        result.append(encoded)
     return tuple(result)
 
 
