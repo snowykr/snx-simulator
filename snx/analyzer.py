@@ -13,7 +13,8 @@ from snx.ast import (
     Program,
     RegisterOperand,
 )
-from snx.constants import DEFAULT_REG_COUNT
+from snx.constants import DEFAULT_MEM_SIZE, DEFAULT_REG_COUNT
+from snx.word import WORD_MASK
 from snx.diagnostics import DiagnosticCollector, RelatedInfo, SourceSpan
 
 if TYPE_CHECKING:
@@ -46,10 +47,18 @@ class AnalysisResult:
 
 
 class Analyzer:
-    def __init__(self, program: Program, diagnostics: DiagnosticCollector, *, reg_count: int = DEFAULT_REG_COUNT) -> None:
+    def __init__(
+        self,
+        program: Program,
+        diagnostics: DiagnosticCollector,
+        *,
+        reg_count: int = DEFAULT_REG_COUNT,
+        mem_size: int = DEFAULT_MEM_SIZE,
+    ) -> None:
         self._program = program
         self._diagnostics = diagnostics
         self._reg_count = reg_count
+        self._mem_size = mem_size
         self._labels: dict[str, int] = {}
         self._label_spans: dict[str, SourceSpan] = {}
         self._instructions: list[InstructionIR] = []
@@ -112,6 +121,7 @@ class Analyzer:
             self._check_operand_spec(inst, line.line_no)
             self._check_register_bounds(inst, line.line_no)
             self._check_label_refs(inst, line.line_no)
+            self._check_memory_bounds(inst, line.line_no)
 
             inst_ir = InstructionIR(
                 opcode=inst.opcode,
@@ -191,15 +201,37 @@ class Analyzer:
                         operand.span,
                     )
 
+    def _check_memory_bounds(self, inst: InstructionNode, line_no: int) -> None:
+        if inst.opcode not in (Opcode.LDA, Opcode.LD, Opcode.ST):
+            return
+
+        for operand in inst.operands:
+            if not isinstance(operand, AddressOperand):
+                continue
+
+            if operand.base.index != 0:
+                continue
+
+            ea = operand.offset & WORD_MASK
+            if ea >= self._mem_size:
+                self._diagnostics.add_line_error(
+                    line_no,
+                    "M001",
+                    f"Memory address {ea} (0x{ea:04X}) is out of bounds "
+                    f"(mem_size={self._mem_size})",
+                    operand.span,
+                )
+
 
 def analyze(
     program: Program,
     diagnostics: DiagnosticCollector | None = None,
     *,
     reg_count: int = DEFAULT_REG_COUNT,
+    mem_size: int = DEFAULT_MEM_SIZE,
 ) -> AnalysisResult:
     if diagnostics is None:
         diagnostics = DiagnosticCollector()
 
-    analyzer = Analyzer(program, diagnostics, reg_count=reg_count)
+    analyzer = Analyzer(program, diagnostics, reg_count=reg_count, mem_size=mem_size)
     return analyzer.analyze()

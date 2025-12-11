@@ -123,6 +123,11 @@ class SNXSimulator:
             self.memory[addr] = word(value)
             self._mem_initialized[addr] = True
 
+    def _load_mem(self, addr: int) -> int:
+        if 0 <= addr < self._mem_size:
+            return self.memory[addr]
+        return 0
+
     def _read_input(self) -> int:
         if self._input_fn is not None:
             return word(self._input_fn())
@@ -169,7 +174,7 @@ class SNXSimulator:
             addr_op = operands[1]
             if isinstance(dest, RegisterOperand) and isinstance(addr_op, AddressOperand):
                 addr = self._calc_effective_addr(addr_op)
-                self._set_reg(dest.index, self.memory[addr])
+                self._set_reg(dest.index, self._load_mem(addr))
 
         elif op == Opcode.ST:
             src = operands[0]

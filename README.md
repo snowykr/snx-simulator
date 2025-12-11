@@ -41,6 +41,7 @@ The script will first print the static analysis result (errors and warnings). If
 The SN-X toolchain performs several static checks before executing a program, similar in spirit to `go build` or `cargo check`:
 
 - **Syntax and basic semantics**: unknown instructions, invalid operand counts/types, register index bounds, undefined or duplicate labels.
+- **Memory bounds checking**: absolute addresses (`base == $0`) that exceed `mem_size` are flagged as errors (code `M001`).
 - **Control-flow analysis (CFG)**: builds a control-flow graph to identify unreachable code and certain obvious infinite loops (regions of code with no path to `HLT`).
 - **Dataflow analysis**: tracks initialization state of registers/memory and return-address usage to detect:
   - reads from uninitialized or potentially uninitialized memory,
@@ -48,7 +49,7 @@ The SN-X toolchain performs several static checks before executing a program, si
 
 These checks are integrated into the compiler and simulator:
 
-- `compile_program(source: str, *, reg_count: int = DEFAULT_REG_COUNT, run_static_checks: bool = True)`
+- `compile_program(source: str, *, reg_count: int = DEFAULT_REG_COUNT, mem_size: int = DEFAULT_MEM_SIZE, run_static_checks: bool = True)`
   - parses and analyzes the source program,
   - runs static analysis by default,
   - returns a `CompileResult` containing:
@@ -56,6 +57,7 @@ These checks are integrated into the compiler and simulator:
     - `ir`: lowered `IRProgram` or `None` if analysis failed,
     - `diagnostics`: list of all errors and warnings,
     - `reg_count`: the register count used for static analysis (default: 4),
+    - `mem_size`: the memory size used for static analysis (default: 2^16),
     - `cfg`: the control-flow graph (when static checks are enabled),
     - `dataflow`: dataflow analysis result (when static checks are enabled).
   - helper methods:
@@ -64,7 +66,7 @@ These checks are integrated into the compiler and simulator:
 
 - Default constants are defined in `snx/constants.py`:
   - `DEFAULT_REG_COUNT = 4`
-  - `DEFAULT_MEM_SIZE = 128`
+  - `DEFAULT_MEM_SIZE = 2 ** 16` (65536 words, matching full SN/X architecture)
 
 Example: running static checks from Python without executing the simulator:
 
@@ -88,12 +90,12 @@ if result.has_errors():
     raise SystemExit(1)
 ```
 
-- `SNXSimulator.from_compile_result(result: CompileResult, *, mem_size: int = DEFAULT_MEM_SIZE, trace_callback=None)`
+- `SNXSimulator.from_compile_result(result: CompileResult, *, mem_size: int = DEFAULT_MEM_SIZE, trace_callback=None, input_fn=None, output_fn=None)`
   - creates a simulator from an existing `CompileResult`,
   - raises `ValueError` if the result contains errors or has no IR,
   - uses `result.reg_count` to configure the simulator's register count.
 
-- `SNXSimulator.from_source(source: str, *, reg_count: int = DEFAULT_REG_COUNT, mem_size: int = DEFAULT_MEM_SIZE, trace_callback=None)`
+- `SNXSimulator.from_source(source: str, *, reg_count: int = DEFAULT_REG_COUNT, mem_size: int = DEFAULT_MEM_SIZE, trace_callback=None, input_fn=None, output_fn=None)`
   - convenience method that internally calls `compile_program` then `from_compile_result`,
   - raises `ValueError` if compilation or static analysis reports any errors.
 
@@ -208,7 +210,32 @@ print(sim.get_output_buffer())
 ### Memory in This Simulator
 
 - **Architecture spec:** 2^16 words each for IMEM and DMEM.
-- **Simulator default:** 128-word data memory (`DEFAULT_MEM_SIZE`). Configurable via `mem_size` parameter.
+- **Simulator default:** 2^16 words (65536) data memory, matching the full SN/X architecture.
+- **Configurable:** Use `mem_size` parameter to reduce memory size for testing or constrained environments.
+
+#### Reduced Memory Mode
+
+When `mem_size < 2^16`, the simulator operates in "reduced memory mode":
+
+- **Static analysis:** Absolute addresses (`base == $0`) that exceed `mem_size` are flagged as errors at compile time (error code `M001`).
+- **Runtime behavior:**
+  - **LD:** Reading from an out-of-bounds address returns 0.
+  - **ST:** Writing to an out-of-bounds address is silently ignored (no-op).
+
+Example with reduced memory:
+
+```python
+from snx import compile_program, SNXSimulator
+
+source = """
+main:
+    LDA $1, 1000($0)  ; Error: address 1000 exceeds mem_size=128
+    HLT
+"""
+
+result = compile_program(source, mem_size=128)
+print(result.format_diagnostics())  # Shows M001 error
+```
 
 ### Trace Output
 
