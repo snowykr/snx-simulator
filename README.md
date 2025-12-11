@@ -41,6 +41,31 @@ This document includes a concise technical summary of the SN/X architecture and 
 
 uv automatically manages the Python version and virtual environment. The repository includes `sample.s` as an example program.
 
+## Global Installation with uv (optional)
+
+If you want to use `snx` as a normal shell command (without prefixing `uv run` every time), you can install it as a uv-managed tool.
+
+```bash
+git clone https://github.com/snowykr/snx-simulator.git
+cd snx-simulator
+
+uv tool install .
+```
+
+After installation, `snx` is available globally:
+
+```bash
+snx --version
+snx sample.s
+snx path/to/program.s
+```
+
+To uninstall:
+
+```bash
+uv tool uninstall snx-simulator
+```
+
 ## Development Setup (optional)
 
 If you want to set up a local development environment (e.g., for IDE integration or contributing to this project):
@@ -59,14 +84,23 @@ snx path/to/program.s   # Run any .s file
 ## Usage
 
 ```
-Usage: snx PATH
+usage: snx [-h] [-V] PATH
 
-  PATH    Path to an SN/X assembly source file (.s)
+Simulate execution of SN/X assembly programs.
+
+positional arguments:
+  PATH           path to an SN/X assembly source file (.s)
+
+options:
+  -h, --help     show this help message and exit
+  -V, --version  show program's version number and exit
 
 Examples:
   snx sample.s
   snx ./examples/fib.s
   snx ~/snx-programs/demo.s
+
+Project: https://github.com/snowykr/snx-simulator
 ```
 
 ### Running with uv (recommended)
