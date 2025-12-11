@@ -112,6 +112,9 @@ def encode_instruction(inst: InstructionIR, labels: dict[str, int]) -> int:
         if not (isinstance(cond_reg, RegisterOperand) and isinstance(label_op, LabelRefOperand)):
             raise EncodingError(f"Invalid operands for BZ instruction: {inst.text}")
         label_pc = labels.get(label_op.name, 0)
+        # NOTE: This uses addition (not bitwise OR) intentionally to match the
+        # original snxasm branch encoding, including overflow behavior when
+        # the target PC exceeds the 10-bit field (see README: "Branch Encoding and Program Length Limit").
         return word(
             (op_int << 12) +
             (cond_reg.index << 10) +
@@ -126,6 +129,9 @@ def encode_instruction(inst: InstructionIR, labels: dict[str, int]) -> int:
 
         if isinstance(target_op, LabelRefOperand):
             label_pc = labels.get(target_op.name, 0)
+            # NOTE: This also uses addition intentionally to preserve snxasm's
+            # original BAL label encoding semantics, including overflow into
+            # opcode/register bits for large PCs (see README).
             return word(
                 (op_int << 12) +
                 (link_reg.index << 10) +
