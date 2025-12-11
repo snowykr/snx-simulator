@@ -202,7 +202,7 @@ class Analyzer:
                     )
 
     def _check_memory_bounds(self, inst: InstructionNode, line_no: int) -> None:
-        if inst.opcode not in (Opcode.LDA, Opcode.LD, Opcode.ST):
+        if inst.opcode not in (Opcode.LD, Opcode.ST):
             return
 
         for operand in inst.operands:

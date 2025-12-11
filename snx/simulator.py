@@ -19,6 +19,7 @@ if TYPE_CHECKING:
 
 InputFn = Callable[[], int]
 OutputFn = Callable[[int], None]
+OobCallbackFn = Callable[[str, int, int, str, int], None]
 
 
 class SNXSimulator:
@@ -31,6 +32,7 @@ class SNXSimulator:
         trace_callback: Callable[[int, str, list[int]], None] | None = None,
         input_fn: InputFn | None = None,
         output_fn: OutputFn | None = None,
+        oob_callback: OobCallbackFn | None = None,
     ):
         self.regs: list[int] = [0] * reg_count
         self.memory: list[int] = [0] * mem_size
@@ -43,10 +45,14 @@ class SNXSimulator:
         self._trace_callback = trace_callback
         self._input_fn = input_fn
         self._output_fn = output_fn
+        self._oob_callback = oob_callback
         self._output_buffer: list[int] = []
         self._ir_program = ir_program
         self._instructions = ir_program.instructions
         self._labels = ir_program.labels
+
+        self._current_pc: int = 0
+        self._current_inst_text: str = ""
 
     @classmethod
     def from_compile_result(
@@ -57,6 +63,7 @@ class SNXSimulator:
         trace_callback: Callable[[int, str, list[int]], None] | None = None,
         input_fn: InputFn | None = None,
         output_fn: OutputFn | None = None,
+        oob_callback: OobCallbackFn | None = None,
     ) -> SNXSimulator:
         if result.has_errors():
             raise ValueError(
@@ -72,6 +79,7 @@ class SNXSimulator:
             trace_callback=trace_callback,
             input_fn=input_fn,
             output_fn=output_fn,
+            oob_callback=oob_callback,
         )
 
     @classmethod
@@ -84,14 +92,16 @@ class SNXSimulator:
         trace_callback: Callable[[int, str, list[int]], None] | None = None,
         input_fn: InputFn | None = None,
         output_fn: OutputFn | None = None,
+        oob_callback: OobCallbackFn | None = None,
     ) -> SNXSimulator:
-        result = compile_program(code_str, reg_count=reg_count)
+        result = compile_program(code_str, reg_count=reg_count, mem_size=mem_size)
         return cls.from_compile_result(
             result,
             mem_size=mem_size,
             trace_callback=trace_callback,
             input_fn=input_fn,
             output_fn=output_fn,
+            oob_callback=oob_callback,
         )
 
     @property
@@ -118,14 +128,27 @@ class SNXSimulator:
         self.regs[index] = word(value)
         self._reg_initialized[index] = True
 
+    def _notify_oob(self, kind: str, addr: int) -> None:
+        if self._oob_callback is not None:
+            self._oob_callback(
+                kind,
+                addr,
+                self._current_pc,
+                self._current_inst_text,
+                self._mem_size,
+            )
+
     def _set_mem(self, addr: int, value: int) -> None:
         if 0 <= addr < self._mem_size:
             self.memory[addr] = word(value)
             self._mem_initialized[addr] = True
+            return
+        self._notify_oob("store", addr)
 
     def _load_mem(self, addr: int) -> int:
         if 0 <= addr < self._mem_size:
             return self.memory[addr]
+        self._notify_oob("load", addr)
         return 0
 
     def _read_input(self) -> int:
@@ -150,6 +173,9 @@ class SNXSimulator:
         inst = self._instructions[self.pc]
         current_pc = self.pc
         self.pc += 1
+
+        self._current_pc = current_pc
+        self._current_inst_text = inst.text
 
         self._execute(inst)
 

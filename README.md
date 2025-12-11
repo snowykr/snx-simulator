@@ -217,25 +217,67 @@ print(sim.get_output_buffer())
 
 When `mem_size < 2^16`, the simulator operates in "reduced memory mode":
 
-- **Static analysis:** Absolute addresses (`base == $0`) that exceed `mem_size` are flagged as errors at compile time (error code `M001`).
+- **Static analysis:** For `LD`/`ST` with absolute addresses (`base == $0`) that exceed `mem_size`, an error is flagged at compile time (error code `M001`). Note: `LDA` is not checked since it only computes an address without accessing memory.
 - **Runtime behavior:**
   - **LD:** Reading from an out-of-bounds address returns 0.
   - **ST:** Writing to an out-of-bounds address is silently ignored (no-op).
 
-Example with reduced memory:
+Example with reduced memory (static error):
 
 ```python
-from snx import compile_program, SNXSimulator
+from snx import compile_program
 
 source = """
 main:
-    LDA $1, 1000($0)  ; Error: address 1000 exceeds mem_size=128
+    LD $1, 1000($0)  ; Error: address 1000 exceeds mem_size=128
     HLT
 """
 
 result = compile_program(source, mem_size=128)
 print(result.format_diagnostics())  # Shows M001 error
 ```
+
+#### OOB Callback (Runtime Hook)
+
+For dynamic addresses (where `base != $0`), out-of-bounds access cannot be detected at compile time. You can use the `oob_callback` parameter to receive notifications when OOB access occurs at runtime:
+
+```python
+from snx import SNXSimulator
+
+def log_oob(kind, addr, pc, inst_text, mem_size):
+    print(f"[OOB] {kind} at addr={addr} (pc={pc}): {inst_text}")
+
+source = """
+main:
+    LDA $1, 200($0)   ; $1 = 200 (no OOB check for LDA)
+    LD $2, 0($1)      ; Runtime OOB: addr=200 > mem_size=128
+    HLT
+"""
+
+sim = SNXSimulator.from_source(
+    source,
+    mem_size=128,
+    oob_callback=log_oob,
+)
+sim.run()
+# Output: [OOB] load at addr=200 (pc=1): LD $2, 0($1)
+```
+
+**Callback signature:**
+```python
+def oob_callback(
+    kind: str,      # "load" or "store"
+    addr: int,      # Effective address (16-bit masked)
+    pc: int,        # Program counter of the instruction
+    inst_text: str, # Original assembly text
+    mem_size: int,  # Current memory size
+) -> None: ...
+```
+
+**Behavior:**
+- If `oob_callback` is `None` (default), OOB access is handled silently (LD returns 0, ST is no-op).
+- If `oob_callback` is set, it is called before the default behavior.
+- If the callback raises an exception, the simulator stops immediately.
 
 ### Trace Output
 
