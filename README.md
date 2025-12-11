@@ -41,14 +41,31 @@ This document includes a concise technical summary of the SN/X architecture and 
 
 uv automatically manages the Python version and virtual environment. The repository includes `sample.s` as an example program.
 
+## Try Without Installing (optional)
+
+You can run `snx` once without installing anything using `uvx`:
+
+```bash
+uvx --from git+https://github.com/snowykr/snx-simulator.git snx sample.s
+```
+
+This downloads and runs `snx` in a temporary environment that is automatically cleaned up.
+
 ## Global Installation with uv (optional)
 
 If you want to use `snx` as a normal shell command (without prefixing `uv run` every time), you can install it as a uv-managed tool.
 
+**One-line install (no clone required):**
+
+```bash
+uv tool install git+https://github.com/snowykr/snx-simulator.git
+```
+
+**Or, from a local clone:**
+
 ```bash
 git clone https://github.com/snowykr/snx-simulator.git
 cd snx-simulator
-
 uv tool install .
 ```
 
@@ -58,6 +75,12 @@ After installation, `snx` is available globally:
 snx --version
 snx sample.s
 snx path/to/program.s
+```
+
+If `snx` is not found after installation, ensure the uv tool directory is on your PATH:
+
+```bash
+uv tool update-shell
 ```
 
 To uninstall:
