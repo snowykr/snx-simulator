@@ -11,28 +11,79 @@ This document includes a concise technical summary of the SN/X architecture and 
 - Python 3.11 or higher
 - [uv](https://github.com/astral-sh/uv)
 
-## Installation
+## Quick Start
 
 1. Install uv (if not already installed)
+
+   **macOS / Linux:**
    ```bash
-   pip install uv
+   curl -LsSf https://astral.sh/uv/install.sh | sh
    ```
-2. Create and activate a virtual environment
+
+   **Windows (PowerShell):**
+   ```powershell
+   powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+   ```
+
+2. Choose your preferred execution method:
+
+   **Option A: uv run (recommended for quick usage)**
    ```bash
-   uv venv
-   source .venv/bin/activate
+   uv run snx
    ```
-3. Install project dependencies
+   
+   **Option B: Activate virtual environment then run**
    ```bash
-   uv pip install -e .
+   uv sync
+   source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+   snx
    ```
+
+uv automatically manages the Python version and virtual environment. Use Option A for one-off commands, or Option B if you prefer working directly in the activated environment.
+
+## Development Setup (optional)
+
+If you want to set up a local development environment (e.g., for IDE integration or contributing to this project):
+
+```bash
+uv sync
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+```
+
+After this setup, you can run the program with any of these methods:
+```bash
+snx              # Using the installed command
+python main.py    # Running the script directly
+uv run snx        # Using uv run (from project root)
+```
 
 ## Running the Sample Program
 
-Run the main script to run static analysis and, if there are no errors, execute a sample assembly program and view the trace table:
+You have multiple ways to run the sample program:
+
+### Method 1: uv run (recommended)
 ```bash
-uv run python main.py
+uv run snx
 ```
+- Automatically manages the virtual environment
+- No manual activation required
+- Works from the project root
+
+### Method 2: Activate virtual environment first
+```bash
+uv sync
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+snx
+```
+- Use this if you prefer working in an activated environment
+- Once activated, you can run `snx` repeatedly without uv
+
+### Method 3: Direct script execution
+```bash
+uv run main.py
+```
+- Equivalent to Method 1, but runs the script directly
+- Useful for debugging or when you want to bypass the CLI wrapper
 
 The script will first print the static analysis result (errors and warnings). If any errors are reported, execution is aborted before the simulator runs.
 
