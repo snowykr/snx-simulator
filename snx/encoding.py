@@ -10,6 +10,7 @@ from snx.ast import (
     Opcode,
     RegisterOperand,
 )
+from snx.word import IMM8_MASK
 
 if TYPE_CHECKING:
     pass
@@ -33,7 +34,6 @@ OPCODE_TO_INT: dict[Opcode, int] = {
 
 INT_TO_OPCODE: dict[int, Opcode] = {v: k for k, v in OPCODE_TO_INT.items()}
 
-IMM8_MASK = 0xFF
 LABEL_PC_MASK = 0x3FF
 
 

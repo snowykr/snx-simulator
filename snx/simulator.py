@@ -12,7 +12,7 @@ from snx.ast import (
 )
 from snx.compiler import compile_program
 from snx.constants import DEFAULT_MEM_SIZE, DEFAULT_REG_COUNT
-from snx.word import signed16, word
+from snx.word import normalize_imm8, signed16, word
 
 if TYPE_CHECKING:
     from snx.compiler import CompileResult
@@ -122,7 +122,8 @@ class SNXSimulator:
     def _calc_effective_addr(self, operand: AddressOperand) -> int:
         base_idx = operand.base.index
         base_val = 0 if base_idx == 0 else self.regs[base_idx]
-        return word(operand.offset + base_val)
+        eff_offset = normalize_imm8(operand.offset)
+        return word(base_val + eff_offset)
 
     def _set_reg(self, index: int, value: int) -> None:
         self.regs[index] = word(value)

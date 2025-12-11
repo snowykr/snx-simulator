@@ -14,7 +14,7 @@ from snx.ast import (
     RegisterOperand,
 )
 from snx.constants import DEFAULT_MEM_SIZE, DEFAULT_REG_COUNT
-from snx.word import WORD_MASK
+from snx.word import normalize_imm8, WORD_MASK
 from snx.diagnostics import DiagnosticCollector, RelatedInfo, SourceSpan
 
 if TYPE_CHECKING:
@@ -213,7 +213,8 @@ class Analyzer:
             if operand.base.index != 0:
                 continue
 
-            ea = operand.offset & WORD_MASK
+            eff_offset = normalize_imm8(operand.offset)
+            ea = eff_offset & WORD_MASK
             if ea >= self._mem_size:
                 self._diagnostics.add_line_error(
                     line_no,
@@ -236,13 +237,12 @@ class Analyzer:
                 continue
 
             offset = operand.offset
-            if offset < -128 or offset > 255:
-                truncated = offset & 0xFF
+            norm = normalize_imm8(offset)
+            if norm != offset:
                 self._diagnostics.add_line_warning(
                     line_no,
                     "I001",
-                    f"Immediate value {offset} is outside 8-bit range (-128 to 255); "
-                    f"will be truncated to {truncated} (0x{truncated:02X}) during encoding",
+                    f"Immediate value {offset} will be encoded as 8-bit and interpreted as {norm} (0x{norm & 0xFF:02X})",
                     operand.span,
                 )
 

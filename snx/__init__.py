@@ -5,7 +5,16 @@ from snx.trace import format_trace_header, format_trace_row
 from snx.cfg import CFG, build_cfg
 from snx.dataflow import DataflowResult, analyze_dataflow
 from snx.checker import check_program, CheckResult
-from snx.word import word, signed16, WORD_MASK, WORD_BITS
+from snx.word import (
+    word,
+    signed16,
+    WORD_MASK,
+    WORD_BITS,
+    IMM8_MASK,
+    imm8,
+    signed8,
+    normalize_imm8,
+)
 from snx.encoding import (
     encode_instruction,
     encode_program,
@@ -35,6 +44,10 @@ __all__ = [
     "signed16",
     "WORD_MASK",
     "WORD_BITS",
+    "IMM8_MASK",
+    "imm8",
+    "signed8",
+    "normalize_imm8",
     "encode_instruction",
     "encode_program",
     "decode_word",

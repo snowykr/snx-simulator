@@ -149,6 +149,30 @@ All instructions are 16-bit fixed length.
 | **R0** | `OP` | `OP(4) \| Unused(12)` |
 | **I** | `OP R1, Imm(R2)` | `OP(4) \| Dest(2) \| Base(2) \| Imm(8)` |
 
+#### 8-bit Immediate Encoding and Interpretation
+
+For I-type instructions (LD, ST, LDA, BAL with address operand), the immediate/offset field is **8 bits wide**. This implementation follows the original snxasm assembler behavior exactly:
+
+- **Encoding:** The immediate value is masked to 8 bits (`imm & 0xFF`) during binary encoding.
+- **Execution:** The 8-bit value is **sign-extended** to 16 bits before being added to the base register.
+  - Values 0x00–0x7F (0–127) are interpreted as positive.
+  - Values 0x80–0xFF (128–255) are interpreted as negative (-128 to -1).
+
+This means the effective range for immediate values is **-128 to 127**. If a source value falls outside this range, it will be truncated and sign-extended, resulting in a different effective value. The static analyzer issues warning **I001** when this occurs.
+
+**Example:**
+```asm
+LDA $1, 300($0)   ; Source value: 300
+                  ; Encoded as: 300 & 0xFF = 0x2C (44)
+                  ; Interpreted as: 44 (positive, since 0x2C < 0x80)
+                  ; Warning I001: "Immediate value 300 will be encoded as 8-bit and interpreted as 44 (0x2C)"
+
+LDA $1, -2($3)    ; Source value: -2
+                  ; Encoded as: -2 & 0xFF = 0xFE (254)
+                  ; Interpreted as: -2 (sign-extended, since 0xFE >= 0x80)
+                  ; No warning (value unchanged after normalization)
+```
+
 ### Full Instruction Set
 
 | Opcode | Mnemonic | Type | Operation |
