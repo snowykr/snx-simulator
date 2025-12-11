@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 from snx.analyzer import analyze
 from snx.ast import IRProgram, Program
-from snx.constants import DEFAULT_REG_COUNT
+from snx.constants import DEFAULT_MEM_SIZE, DEFAULT_REG_COUNT
 from snx.diagnostics import Diagnostic, DiagnosticCollector, Severity
 from snx.parser import parse
 
@@ -20,6 +20,7 @@ class CompileResult:
     ir: IRProgram | None
     diagnostics: list[Diagnostic]
     reg_count: int = DEFAULT_REG_COUNT
+    mem_size: int = DEFAULT_MEM_SIZE
     cfg: CFG | None = None
     dataflow: DataflowResult | None = None
 
@@ -55,6 +56,7 @@ def _compile_internal(
     diagnostics: DiagnosticCollector,
     *,
     reg_count: int = DEFAULT_REG_COUNT,
+    mem_size: int = DEFAULT_MEM_SIZE,
     run_static_checks: bool = True,
 ) -> tuple[Program | None, IRProgram | None, "CFG | None", "DataflowResult | None"]:
     parse_result = parse(source, diagnostics)
@@ -62,7 +64,12 @@ def _compile_internal(
     if parse_result.program is None:
         return None, None, None, None
 
-    analysis_result = analyze(parse_result.program, diagnostics, reg_count=reg_count)
+    analysis_result = analyze(
+        parse_result.program,
+        diagnostics,
+        reg_count=reg_count,
+        mem_size=mem_size,
+    )
 
     if analysis_result.ir is None:
         return analysis_result.program, None, None, None
@@ -78,6 +85,7 @@ def _compile_internal(
             analysis_result.ir,
             diagnostics,
             reg_count=reg_count,
+            mem_size=mem_size,
         )
         cfg = check_result.cfg
         dataflow = check_result.dataflow
@@ -89,6 +97,7 @@ def compile_program(
     source: str,
     *,
     reg_count: int = DEFAULT_REG_COUNT,
+    mem_size: int = DEFAULT_MEM_SIZE,
     run_static_checks: bool = True,
 ) -> CompileResult:
     diagnostics = DiagnosticCollector()
@@ -96,6 +105,7 @@ def compile_program(
         source,
         diagnostics,
         reg_count=reg_count,
+        mem_size=mem_size,
         run_static_checks=run_static_checks,
     )
 
@@ -104,6 +114,7 @@ def compile_program(
         ir=ir,
         diagnostics=diagnostics.diagnostics,
         reg_count=reg_count,
+        mem_size=mem_size,
         cfg=cfg,
         dataflow=dataflow,
     )

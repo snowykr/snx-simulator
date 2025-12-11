@@ -13,7 +13,8 @@ from snx.ast import (
     Program,
     RegisterOperand,
 )
-from snx.constants import DEFAULT_REG_COUNT
+from snx.constants import DEFAULT_MEM_SIZE, DEFAULT_REG_COUNT
+from snx.word import normalize_imm8, WORD_MASK
 from snx.diagnostics import DiagnosticCollector, RelatedInfo, SourceSpan
 
 if TYPE_CHECKING:
@@ -23,15 +24,18 @@ if TYPE_CHECKING:
 OPCODE_OPERAND_SPEC: dict[Opcode, tuple[int, tuple[type, ...]]] = {
     Opcode.ADD: (3, (RegisterOperand, RegisterOperand, RegisterOperand)),
     Opcode.AND: (3, (RegisterOperand, RegisterOperand, RegisterOperand)),
+    Opcode.SUB: (3, (RegisterOperand, RegisterOperand, RegisterOperand)),
     Opcode.SLT: (3, (RegisterOperand, RegisterOperand, RegisterOperand)),
     Opcode.NOT: (2, (RegisterOperand, RegisterOperand)),
     Opcode.SR: (2, (RegisterOperand, RegisterOperand)),
-    Opcode.LDA: (2, (RegisterOperand, AddressOperand)),
+    Opcode.HLT: (0, ()),
     Opcode.LD: (2, (RegisterOperand, AddressOperand)),
     Opcode.ST: (2, (RegisterOperand, AddressOperand)),
+    Opcode.LDA: (2, (RegisterOperand, AddressOperand)),
+    Opcode.IN: (1, (RegisterOperand,)),
+    Opcode.OUT: (1, (RegisterOperand,)),
     Opcode.BZ: (2, (RegisterOperand, LabelRefOperand)),
     Opcode.BAL: (2, (RegisterOperand, (LabelRefOperand, AddressOperand))),
-    Opcode.HLT: (0, ()),
 }
 
 
@@ -43,10 +47,18 @@ class AnalysisResult:
 
 
 class Analyzer:
-    def __init__(self, program: Program, diagnostics: DiagnosticCollector, *, reg_count: int = DEFAULT_REG_COUNT) -> None:
+    def __init__(
+        self,
+        program: Program,
+        diagnostics: DiagnosticCollector,
+        *,
+        reg_count: int = DEFAULT_REG_COUNT,
+        mem_size: int = DEFAULT_MEM_SIZE,
+    ) -> None:
         self._program = program
         self._diagnostics = diagnostics
         self._reg_count = reg_count
+        self._mem_size = mem_size
         self._labels: dict[str, int] = {}
         self._label_spans: dict[str, SourceSpan] = {}
         self._instructions: list[InstructionIR] = []
@@ -109,6 +121,9 @@ class Analyzer:
             self._check_operand_spec(inst, line.line_no)
             self._check_register_bounds(inst, line.line_no)
             self._check_label_refs(inst, line.line_no)
+            self._check_branch_target_range(inst, line.line_no)
+            self._check_memory_bounds(inst, line.line_no)
+            self._check_immediate_range(inst, line.line_no)
 
             inst_ir = InstructionIR(
                 opcode=inst.opcode,
@@ -188,15 +203,82 @@ class Analyzer:
                         operand.span,
                     )
 
+    def _check_branch_target_range(self, inst: InstructionNode, line_no: int) -> None:
+        if inst.opcode not in (Opcode.BZ, Opcode.BAL):
+            return
+
+        for operand in inst.operands:
+            if not isinstance(operand, LabelRefOperand):
+                continue
+
+            if operand.name not in self._labels:
+                continue
+
+            target_pc = self._labels[operand.name]
+            if target_pc >= 1024:
+                self._diagnostics.add_line_warning(
+                    line_no,
+                    "B001",
+                    f"Branch target '{operand.original}' has PC {target_pc}, which exceeds "
+                    f"the 10-bit branch field limit (0-1023); encoding will overflow into "
+                    f"opcode/register bits (matching original snxasm behavior)",
+                    operand.span,
+                )
+
+    def _check_memory_bounds(self, inst: InstructionNode, line_no: int) -> None:
+        if inst.opcode not in (Opcode.LD, Opcode.ST):
+            return
+
+        for operand in inst.operands:
+            if not isinstance(operand, AddressOperand):
+                continue
+
+            if operand.base.index != 0:
+                continue
+
+            eff_offset = normalize_imm8(operand.offset)
+            ea = eff_offset & WORD_MASK
+            if ea >= self._mem_size:
+                self._diagnostics.add_line_error(
+                    line_no,
+                    "M001",
+                    f"Memory address {ea} (0x{ea:04X}) is out of bounds "
+                    f"(mem_size={self._mem_size})",
+                    operand.span,
+                )
+
+    def _check_immediate_range(self, inst: InstructionNode, line_no: int) -> None:
+        if inst.opcode in (Opcode.BZ,):
+            return
+
+        if inst.opcode == Opcode.BAL:
+            if len(inst.operands) >= 2 and isinstance(inst.operands[1], LabelRefOperand):
+                return
+
+        for operand in inst.operands:
+            if not isinstance(operand, AddressOperand):
+                continue
+
+            offset = operand.offset
+            norm = normalize_imm8(offset)
+            if norm != offset:
+                self._diagnostics.add_line_warning(
+                    line_no,
+                    "I001",
+                    f"Immediate value {offset} will be encoded as 8-bit and interpreted as {norm} (0x{norm & 0xFF:02X})",
+                    operand.span,
+                )
+
 
 def analyze(
     program: Program,
     diagnostics: DiagnosticCollector | None = None,
     *,
     reg_count: int = DEFAULT_REG_COUNT,
+    mem_size: int = DEFAULT_MEM_SIZE,
 ) -> AnalysisResult:
     if diagnostics is None:
         diagnostics = DiagnosticCollector()
 
-    analyzer = Analyzer(program, diagnostics, reg_count=reg_count)
+    analyzer = Analyzer(program, diagnostics, reg_count=reg_count, mem_size=mem_size)
     return analyzer.analyze()

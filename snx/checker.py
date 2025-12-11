@@ -10,7 +10,7 @@ from snx.cfg import (
     find_reachable_pcs,
     find_infinite_loop_sccs,
 )
-from snx.constants import DEFAULT_REG_COUNT
+from snx.constants import DEFAULT_MEM_SIZE, DEFAULT_REG_COUNT
 from snx.dataflow import (
     DataflowResult,
     analyze_dataflow,
@@ -69,11 +69,13 @@ class StaticChecker:
         diagnostics: DiagnosticCollector,
         *,
         reg_count: int = DEFAULT_REG_COUNT,
+        mem_size: int = DEFAULT_MEM_SIZE,
     ) -> None:
         self._program = program
         self._ir = ir
         self._diagnostics = diagnostics
         self._reg_count = reg_count
+        self._mem_size = mem_size
         self._cfg: CFG | None = None
         self._dataflow: DataflowResult | None = None
         self._line_spans: dict[int, SourceSpan] = {}
@@ -203,9 +205,10 @@ def check_program(
     diagnostics: DiagnosticCollector | None = None,
     *,
     reg_count: int = DEFAULT_REG_COUNT,
+    mem_size: int = DEFAULT_MEM_SIZE,
 ) -> CheckResult:
     if diagnostics is None:
         diagnostics = DiagnosticCollector()
     
-    checker = StaticChecker(program, ir, diagnostics, reg_count=reg_count)
+    checker = StaticChecker(program, ir, diagnostics, reg_count=reg_count, mem_size=mem_size)
     return checker.check()
