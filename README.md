@@ -1,6 +1,6 @@
 # SN/X Simulator
 
-A Python toolchain (assembler, static analyzer, and simulator) for the **SN/X architecture**, a 16-bit educational RISC processor designed by Naohiko Shimizu.
+A Python toolchain (assembler, static analyzer, and simulator) for the **SN/X architecture**, a 16-bit educational RISC processor described in Naohiko Shimizu (清水尚彦)'s book *コンピュータ設計の基礎知識*.
 
 ## Features
 
