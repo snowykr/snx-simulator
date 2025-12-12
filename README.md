@@ -29,7 +29,7 @@ A Python toolchain (assembler, static analyzer, and simulator) for the **SN/X ar
 **Option 1 — One-off execution (no install):**
 
 ```bash
-uvx snx-simulator sample.s
+uvx --from snx-simulator snx sample.s
 ```
 
 **Option 2 — Global install via uv:**
