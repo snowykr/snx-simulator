@@ -23,23 +23,37 @@ A Python toolchain (assembler, static analyzer, and simulator) for the **SN/X ar
 
 - Python 3.11 or higher
 - [uv](https://github.com/astral-sh/uv) (recommended)
+- [pipx](https://pipx.pypa.io/) (optional)
 
 ## Quick Start
 
 **Option 1 — One-off execution (no install):**
 
 ```bash
+# via uv (recommended)
 uvx --from snx-simulator snx sample.s
+
+# via pipx
+pipx run --spec snx-simulator snx sample.s
 ```
 
-**Option 2 — Global install via uv:**
+**Option 2 — Global install (recommended for CLI usage):**
 
 ```bash
+# via uv (recommended)
 uv tool install snx-simulator
+
 snx sample.s
 ```
 
-**Option 3 — Install via pip:**
+```bash
+# via pipx
+pipx install snx-simulator
+
+snx sample.s
+```
+
+**Option 3 — Install via pip (for an existing Python environment / venv):**
 
 ```bash
 pip install snx-simulator
@@ -86,6 +100,26 @@ To uninstall:
 
 ```bash
 uv tool uninstall snx-simulator
+```
+
+### Global Installation (pipx)
+
+Install `snx` as a system-wide command:
+
+```bash
+pipx install snx-simulator
+```
+
+If `snx` is not found after installation:
+
+```bash
+pipx ensurepath
+```
+
+To uninstall:
+
+```bash
+pipx uninstall snx-simulator
 ```
 
 ### Install via pip
