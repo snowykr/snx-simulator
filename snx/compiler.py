@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+# pyright: reportImportCycles=false
+
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from snx.analyzer import analyze
-from snx.ast import IRProgram, Program
+from snx.ast import DataImageWord, IRProgram, Program, TypedSymbol
 from snx.constants import DEFAULT_MEM_SIZE, DEFAULT_REG_COUNT
 from snx.diagnostics import Diagnostic, DiagnosticCollector, Severity
-from snx.parser import parse
 
 if TYPE_CHECKING:
     from snx.cfg import CFG
@@ -23,6 +24,23 @@ class CompileResult:
     mem_size: int = DEFAULT_MEM_SIZE
     cfg: CFG | None = None
     dataflow: DataflowResult | None = None
+    typed_symbols: dict[str, TypedSymbol] = field(default_factory=dict)
+    initial_data_image: tuple[DataImageWord, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not self.typed_symbols and self.ir is not None and self.ir.typed_symbols:
+            self.typed_symbols = dict(self.ir.typed_symbols)
+        else:
+            self.typed_symbols = dict(self.typed_symbols)
+
+        if (
+            not self.initial_data_image
+            and self.ir is not None
+            and self.ir.initial_data_image
+        ):
+            self.initial_data_image = tuple(self.ir.initial_data_image)
+        else:
+            self.initial_data_image = tuple(self.initial_data_image)
 
     def has_errors(self) -> bool:
         return any(d.severity == Severity.ERROR for d in self.diagnostics)
@@ -33,21 +51,21 @@ class CompileResult:
     def format_diagnostics(self) -> str:
         if not self.diagnostics:
             return "No issues found."
-        
+
         lines = []
         errors = [d for d in self.diagnostics if d.severity == Severity.ERROR]
         warnings = [d for d in self.diagnostics if d.severity == Severity.WARNING]
-        
+
         if errors:
             lines.append(f"=== {len(errors)} Error(s) ===")
             for d in errors:
                 lines.append(str(d))
-        
+
         if warnings:
             lines.append(f"=== {len(warnings)} Warning(s) ===")
             for d in warnings:
                 lines.append(str(d))
-        
+
         return "\n".join(lines)
 
 
@@ -59,6 +77,8 @@ def _compile_internal(
     mem_size: int = DEFAULT_MEM_SIZE,
     run_static_checks: bool = True,
 ) -> tuple[Program | None, IRProgram | None, "CFG | None", "DataflowResult | None"]:
+    from snx.parser import parse
+
     parse_result = parse(source, diagnostics)
 
     if parse_result.program is None:
@@ -79,7 +99,7 @@ def _compile_internal(
 
     if run_static_checks:
         from snx.checker import check_program
-        
+
         check_result = check_program(
             analysis_result.program,
             analysis_result.ir,
@@ -117,4 +137,6 @@ def compile_program(
         mem_size=mem_size,
         cfg=cfg,
         dataflow=dataflow,
+        typed_symbols={} if ir is None else ir.typed_symbols,
+        initial_data_image=() if ir is None else ir.initial_data_image,
     )

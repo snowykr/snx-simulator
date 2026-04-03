@@ -5,7 +5,8 @@ A Python toolchain (assembler, static analyzer, and simulator) for the **SN/X ar
 ## Features
 
 - **Complete SN/X instruction set** — ADD, AND, SUB, SLT, NOT, SR, HLT, LD, ST, LDA, IN, OUT, BZ, BAL
-- **Integrated static analysis** — CFG, dataflow analysis, memory bounds checking
+- **Data Initialization** — `DW` directive for preloading Data Memory (DMEM)
+- **Integrated static analysis** — CFG, dataflow analysis, memory bounds checking, domain-sensitive label rules
 - **CLI + Python API** — Use from command line or as a library
 - **snxasm compatible** — Produces identical binary output to the original assembler
 
@@ -173,8 +174,8 @@ uv run snx sample.s
 
 The CLI will:
 1. Parse and compile the assembly source
-2. Run static analysis (errors and warnings)
-3. If no errors, execute the program and display a trace table
+2. Run static analysis (errors, warnings, and domain-sensitive label checks)
+3. If no errors, execute the program with preloaded `DW` data and display a trace table
 
 ## Python API
 
@@ -183,8 +184,11 @@ from snx import compile_program, SNXSimulator
 
 source = """
 main:
-    LDA $1, 5($0)
+    LD $1, my_data
+    OUT $1
     HLT
+my_data:
+    DW 42
 """
 
 result = compile_program(source)

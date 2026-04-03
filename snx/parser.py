@@ -4,6 +4,8 @@ from dataclasses import dataclass
 
 from snx.ast import (
     AddressOperand,
+    DirectiveKind,
+    DirectiveNode,
     InstructionNode,
     LabelDef,
     LabelRefOperand,
@@ -14,7 +16,7 @@ from snx.ast import (
     RegisterOperand,
 )
 from snx.constants import DEFAULT_REG_COUNT
-from snx.diagnostics import DiagnosticCollector, SourceSpan
+from snx.diagnostics import Diagnostic, DiagnosticCollector, SourceSpan
 from snx.tokenizer import Token, TokenKind, tokenize
 
 
@@ -28,11 +30,16 @@ class Instruction:
 @dataclass(slots=True)
 class ParseResult:
     program: Program | None
-    diagnostics: list
+    diagnostics: list[Diagnostic]
 
 
 class Parser:
-    def __init__(self, tokens: list[Token], source_lines: list[str], diagnostics: DiagnosticCollector) -> None:
+    def __init__(
+        self,
+        tokens: list[Token],
+        source_lines: list[str],
+        diagnostics: DiagnosticCollector,
+    ) -> None:
         self._tokens = tokens
         self._source_lines = source_lines
         self._diagnostics = diagnostics
@@ -80,36 +87,58 @@ class Parser:
             self._pos += 1
         return tok
 
-    def _consume(self, kind: TokenKind, error_code: str, error_msg: str) -> Token | None:
+    def _consume(
+        self, kind: TokenKind, error_code: str, error_msg: str
+    ) -> Token | None:
         if self._check(kind):
             return self._advance()
         tok = self._current()
-        self._diagnostics.add_line_error(
-            tok.line, error_code, error_msg, tok.span
-        )
+        self._diagnostics.add_line_error(tok.line, error_code, error_msg, tok.span)
         return None
 
     def _parse_line(self, line_no: int) -> Line:
-        raw = self._source_lines[line_no - 1] if line_no <= len(self._source_lines) else ""
+        raw = (
+            self._source_lines[line_no - 1]
+            if line_no <= len(self._source_lines)
+            else ""
+        )
 
         label: LabelDef | None = None
+        directive: DirectiveNode | None = None
         instruction: InstructionNode | None = None
 
         if self._check(TokenKind.IDENT) and self._peek(1).kind == TokenKind.COLON:
             label = self._parse_label_def()
 
-        if self._check(TokenKind.IDENT):
+        if self._current().matches_ident("DW"):
+            directive = self._parse_dw_directive()
+        elif self._check(TokenKind.IDENT):
             instruction = self._parse_instruction()
+
+        if (
+            instruction is not None
+            and not self._check(TokenKind.EOL)
+            and not self._check(TokenKind.EOF)
+        ):
+            tok = self._current()
+            self._diagnostics.add_line_error(
+                tok.line,
+                "P003",
+                f"Unexpected token: '{tok.lexeme}'",
+                tok.span,
+            )
 
         while not self._check(TokenKind.EOL) and not self._check(TokenKind.EOF):
             self._advance()
 
-        return Line(line_no, label, instruction, raw)
+        return Line(line_no, label, instruction, raw, directive=directive)
 
     def _parse_label_def(self) -> LabelDef:
         ident_tok = self._advance()
         colon_tok = self._advance()
-        span = SourceSpan(ident_tok.line, ident_tok.column, colon_tok.line, colon_tok.column + 1)
+        span = SourceSpan(
+            ident_tok.line, ident_tok.column, colon_tok.line, colon_tok.column + 1
+        )
         return LabelDef(name=ident_tok.normalized, original=ident_tok.lexeme, span=span)
 
     def _parse_instruction(self) -> InstructionNode:
@@ -145,6 +174,68 @@ class Parser:
             span=span,
         )
 
+    def _parse_dw_directive(self) -> DirectiveNode | None:
+        keyword_tok = self._advance()
+        value_tokens: list[Token] = []
+        values: list[int] = []
+
+        if not self._check(TokenKind.NUMBER):
+            self._add_dw_initializer_error(keyword_tok)
+            return None
+
+        while True:
+            value_tok = self._current()
+            if value_tok.kind is not TokenKind.NUMBER:
+                self._add_dw_initializer_error(keyword_tok)
+                return None
+
+            value_tokens.append(self._advance())
+            try:
+                values.append(int(value_tok.lexeme))
+            except ValueError:
+                self._add_dw_initializer_error(keyword_tok)
+                return None
+
+            if not self._check(TokenKind.COMMA):
+                break
+
+            self._advance()
+            if not self._check(TokenKind.NUMBER):
+                self._add_dw_initializer_error(keyword_tok)
+                return None
+
+        if not self._check(TokenKind.EOL) and not self._check(TokenKind.EOF):
+            self._add_dw_initializer_error(keyword_tok)
+            return None
+
+        last_value_tok = value_tokens[-1]
+        text = keyword_tok.lexeme + " " + ", ".join(tok.lexeme for tok in value_tokens)
+        span = SourceSpan(
+            keyword_tok.line,
+            keyword_tok.column,
+            last_value_tok.line,
+            last_value_tok.column + len(last_value_tok.lexeme),
+        )
+        return DirectiveNode(
+            kind=DirectiveKind.DW,
+            keyword=keyword_tok.lexeme,
+            values=tuple(values),
+            text=text,
+            span=span,
+        )
+
+    def _add_dw_initializer_error(self, keyword_tok: Token) -> None:
+        tok = self._current()
+        span = (
+            keyword_tok.span if tok.kind in {TokenKind.EOL, TokenKind.EOF} else tok.span
+        )
+        self._diagnostics.add_line_error(
+            keyword_tok.line,
+            "P007",
+            "DW requires one or more signed decimal initializers",
+            span,
+        )
+
     def _parse_operands(self) -> list[Operand]:
         operands: list[Operand] = []
 
@@ -174,7 +265,11 @@ class Parser:
             return self._parse_label_ref_operand()
 
         tok = self._current()
-        if not self._check(TokenKind.EOL) and not self._check(TokenKind.EOF) and not self._check(TokenKind.COMMA):
+        if (
+            not self._check(TokenKind.EOL)
+            and not self._check(TokenKind.EOF)
+            and not self._check(TokenKind.COMMA)
+        ):
             self._diagnostics.add_line_error(
                 tok.line,
                 "P003",
@@ -212,9 +307,16 @@ class Parser:
             )
 
         if not self._consume(TokenKind.LPAREN, "P002", "'(' is required."):
-            span = SourceSpan(offset_tok.line, offset_tok.column, offset_tok.line, offset_tok.column + len(offset_tok.lexeme))
+            span = SourceSpan(
+                offset_tok.line,
+                offset_tok.column,
+                offset_tok.line,
+                offset_tok.column + len(offset_tok.lexeme),
+            )
             base = RegisterOperand(text="$0", span=span, index=0)
-            return AddressOperand(text=offset_tok.lexeme, span=span, offset=offset, base=base)
+            return AddressOperand(
+                text=offset_tok.lexeme, span=span, offset=offset, base=base
+            )
 
         if not self._check(TokenKind.REGISTER):
             tok = self._current()
@@ -226,7 +328,9 @@ class Parser:
             )
             span = SourceSpan(offset_tok.line, offset_tok.column, tok.line, tok.column)
             base = RegisterOperand(text="$0", span=tok.span, index=0)
-            return AddressOperand(text=offset_tok.lexeme, span=span, offset=offset, base=base)
+            return AddressOperand(
+                text=offset_tok.lexeme, span=span, offset=offset, base=base
+            )
 
         base = self._parse_register_operand()
 
@@ -235,7 +339,9 @@ class Parser:
             pass
 
         text = f"{offset_tok.lexeme}({base.text})"
-        span = SourceSpan(offset_tok.line, offset_tok.column, rparen_tok.line, rparen_tok.column + 1)
+        span = SourceSpan(
+            offset_tok.line, offset_tok.column, rparen_tok.line, rparen_tok.column + 1
+        )
         return AddressOperand(text=text, span=span, offset=offset, base=base)
 
     def _parse_label_ref_operand(self) -> LabelRefOperand:
@@ -260,7 +366,9 @@ def parse(source: str, diagnostics: DiagnosticCollector | None = None) -> ParseR
     return ParseResult(program=program, diagnostics=diagnostics.diagnostics)
 
 
-def parse_code(code_str: str, *, reg_count: int = DEFAULT_REG_COUNT) -> tuple[list[Instruction], dict[str, int]]:
+def parse_code(
+    code_str: str, *, reg_count: int = DEFAULT_REG_COUNT
+) -> tuple[list[Instruction], dict[str, int]]:
     from snx.compiler import compile_program
 
     result = compile_program(code_str, reg_count=reg_count)
@@ -272,11 +380,13 @@ def parse_code(code_str: str, *, reg_count: int = DEFAULT_REG_COUNT) -> tuple[li
     instructions: list[Instruction] = []
     for inst_ir in ir.instructions:
         operand_strs = tuple(op.text for op in inst_ir.operands)
-        instructions.append(Instruction(
-            opcode=inst_ir.opcode.name,
-            operands=operand_strs,
-            raw=inst_ir.text,
-        ))
+        instructions.append(
+            Instruction(
+                opcode=inst_ir.opcode.name,
+                operands=operand_strs,
+                raw=inst_ir.text,
+            )
+        )
 
     labels = dict(ir.labels)
     return instructions, labels
