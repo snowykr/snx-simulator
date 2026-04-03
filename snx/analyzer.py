@@ -5,23 +5,33 @@ from typing import TYPE_CHECKING
 
 from snx.ast import (
     AddressOperand,
+    DataImageWord,
+    DirectiveKind,
+    DirectiveNode,
     InstructionIR,
     InstructionNode,
     IRProgram,
+    LabelDef,
     LabelRefOperand,
     Opcode,
+    Operand,
     Program,
     RegisterOperand,
+    SymbolKind,
+    TypedSymbol,
 )
 from snx.constants import DEFAULT_MEM_SIZE, DEFAULT_REG_COUNT
-from snx.word import normalize_imm8, WORD_MASK
-from snx.diagnostics import DiagnosticCollector, RelatedInfo, SourceSpan
+from snx.word import IMM8_MAX_SIGNED, IMM8_MIN_SIGNED, WORD_MASK, normalize_imm8, word
+from snx.diagnostics import Diagnostic, DiagnosticCollector, RelatedInfo, SourceSpan
 
 if TYPE_CHECKING:
     pass
 
 
-OPCODE_OPERAND_SPEC: dict[Opcode, tuple[int, tuple[type, ...]]] = {
+OperandTypeSpec = type[Operand] | tuple[type[Operand], ...]
+
+
+OPCODE_OPERAND_SPEC: dict[Opcode, tuple[int, tuple[OperandTypeSpec, ...]]] = {
     Opcode.ADD: (3, (RegisterOperand, RegisterOperand, RegisterOperand)),
     Opcode.AND: (3, (RegisterOperand, RegisterOperand, RegisterOperand)),
     Opcode.SUB: (3, (RegisterOperand, RegisterOperand, RegisterOperand)),
@@ -29,9 +39,9 @@ OPCODE_OPERAND_SPEC: dict[Opcode, tuple[int, tuple[type, ...]]] = {
     Opcode.NOT: (2, (RegisterOperand, RegisterOperand)),
     Opcode.SR: (2, (RegisterOperand, RegisterOperand)),
     Opcode.HLT: (0, ()),
-    Opcode.LD: (2, (RegisterOperand, AddressOperand)),
-    Opcode.ST: (2, (RegisterOperand, AddressOperand)),
-    Opcode.LDA: (2, (RegisterOperand, AddressOperand)),
+    Opcode.LD: (2, (RegisterOperand, (AddressOperand, LabelRefOperand))),
+    Opcode.ST: (2, (RegisterOperand, (AddressOperand, LabelRefOperand))),
+    Opcode.LDA: (2, (RegisterOperand, (AddressOperand, LabelRefOperand))),
     Opcode.IN: (1, (RegisterOperand,)),
     Opcode.OUT: (1, (RegisterOperand,)),
     Opcode.BZ: (2, (RegisterOperand, LabelRefOperand)),
@@ -43,7 +53,7 @@ OPCODE_OPERAND_SPEC: dict[Opcode, tuple[int, tuple[type, ...]]] = {
 class AnalysisResult:
     program: Program
     ir: IRProgram | None
-    diagnostics: list
+    diagnostics: list[Diagnostic]
 
 
 class Analyzer:
@@ -55,16 +65,33 @@ class Analyzer:
         reg_count: int = DEFAULT_REG_COUNT,
         mem_size: int = DEFAULT_MEM_SIZE,
     ) -> None:
-        self._program = program
-        self._diagnostics = diagnostics
-        self._reg_count = reg_count
-        self._mem_size = mem_size
+        self._program: Program = program
+        self._diagnostics: DiagnosticCollector = diagnostics
+        self._reg_count: int = reg_count
+        self._mem_size: int = mem_size
         self._labels: dict[str, int] = {}
-        self._label_spans: dict[str, SourceSpan] = {}
+        self._typed_symbols: dict[str, TypedSymbol] = {}
+        self._symbol_spans: dict[str, SourceSpan] = {}
         self._instructions: list[InstructionIR] = []
+        self._initial_data_image: list[DataImageWord] = []
 
     def analyze(self) -> AnalysisResult:
+        if self._diagnostics.has_errors():
+            return AnalysisResult(
+                program=self._program,
+                ir=None,
+                diagnostics=self._diagnostics.diagnostics,
+            )
+
         self._build_label_table()
+
+        if self._diagnostics.has_errors():
+            return AnalysisResult(
+                program=self._program,
+                ir=None,
+                diagnostics=self._diagnostics.diagnostics,
+            )
+
         self._analyze_instructions()
 
         if self._diagnostics.has_errors():
@@ -77,6 +104,8 @@ class Analyzer:
         ir = IRProgram(
             instructions=tuple(self._instructions),
             labels=dict(self._labels),
+            typed_symbols=dict(self._typed_symbols),
+            initial_data_image=tuple(self._initial_data_image),
         )
         return AnalysisResult(
             program=self._program,
@@ -85,27 +114,42 @@ class Analyzer:
         )
 
     def _build_label_table(self) -> None:
-        pc = 0
+        code_pc = 0
+        data_addr = 0
+        pending_labels: list[LabelDef] = []
+
         for line in self._program.lines:
             if line.label is not None:
-                label_name = line.label.name
-                if label_name in self._labels:
-                    prev_span = self._label_spans[label_name]
-                    self._diagnostics.add_error(
-                        "S006",
-                        f"Duplicate label definition: '{line.label.original}'",
-                        line.label.span,
-                        (RelatedInfo(
-                            "Previous definition",
-                            prev_span,
-                        ),),
+                pending_labels.append(line.label)
+
+            if line.directive is not None:
+                self._define_pending_labels(
+                    pending_labels,
+                    kind=SymbolKind.DATA,
+                    address=data_addr,
+                )
+                pending_labels.clear()
+                if line.directive.kind is DirectiveKind.DW:
+                    data_addr = self._allocate_dw_words(
+                        line.line_no, line.directive, data_addr
                     )
-                else:
-                    self._labels[label_name] = pc
-                    self._label_spans[label_name] = line.label.span
+                continue
 
             if line.instruction is not None:
-                pc += 1
+                self._define_pending_labels(
+                    pending_labels,
+                    kind=SymbolKind.CODE,
+                    address=code_pc,
+                )
+                pending_labels.clear()
+                code_pc += 1
+                continue
+
+        self._define_pending_labels(
+            pending_labels,
+            kind=SymbolKind.CODE,
+            address=code_pc,
+        )
 
     def _analyze_instructions(self) -> None:
         pc = 0
@@ -119,20 +163,193 @@ class Analyzer:
                 continue
 
             self._check_operand_spec(inst, line.line_no)
-            self._check_register_bounds(inst, line.line_no)
-            self._check_label_refs(inst, line.line_no)
-            self._check_branch_target_range(inst, line.line_no)
-            self._check_memory_bounds(inst, line.line_no)
-            self._check_immediate_range(inst, line.line_no)
+            resolved_operands = self._resolve_operands(inst, line.line_no)
+            self._check_register_bounds(resolved_operands, line.line_no)
+            self._check_branch_target_range(
+                inst.opcode, resolved_operands, line.line_no
+            )
+            self._check_memory_bounds(inst.opcode, resolved_operands, line.line_no)
+            self._check_immediate_range(inst.opcode, resolved_operands, line.line_no)
+
+            if self._diagnostics.has_errors():
+                pc += 1
+                continue
 
             inst_ir = InstructionIR(
                 opcode=inst.opcode,
-                operands=inst.operands,
+                operands=resolved_operands,
                 text=inst.text,
                 pc=pc,
             )
             self._instructions.append(inst_ir)
             pc += 1
+
+    def _resolve_operands(
+        self, inst: InstructionNode, line_no: int
+    ) -> tuple[Operand, ...]:
+        resolved_operands: list[Operand] = []
+        opcode = inst.opcode
+
+        for index, operand in enumerate(inst.operands):
+            if not isinstance(operand, LabelRefOperand):
+                resolved_operands.append(operand)
+                continue
+
+            if opcode in (Opcode.LD, Opcode.ST, Opcode.LDA) and index == 1:
+                resolved_operands.append(
+                    self._resolve_data_address_label(operand, line_no)
+                )
+                continue
+
+            if opcode in (Opcode.BZ, Opcode.BAL) and index == 1:
+                self._require_code_label(operand, line_no)
+
+            resolved_operands.append(operand)
+
+        return tuple(resolved_operands)
+
+    def _resolve_data_address_label(
+        self, operand: LabelRefOperand, line_no: int
+    ) -> Operand:
+        symbol = self._typed_symbols.get(operand.name)
+        if symbol is None:
+            self._diagnostics.add_line_error(
+                line_no,
+                "S004",
+                f"Undefined label: '{operand.original}'",
+                operand.span,
+            )
+            return operand
+
+        if symbol.kind is SymbolKind.CODE:
+            self._diagnostics.add_line_error(
+                line_no,
+                "S007",
+                f"Code label '{operand.original}' cannot be used as a data address",
+                operand.span,
+            )
+            return operand
+
+        if not IMM8_MIN_SIGNED <= symbol.address <= IMM8_MAX_SIGNED:
+            self._diagnostics.add_line_error(
+                line_no,
+                "S009",
+                (
+                    f"Data label '{operand.original}' at address {symbol.address} cannot be used "
+                    f"as a bare absolute address; SN/X I-type immediates are limited to "
+                    f"{IMM8_MIN_SIGNED}..{IMM8_MAX_SIGNED}"
+                ),
+                operand.span,
+            )
+            return operand
+
+        return AddressOperand(
+            text=operand.text,
+            span=operand.span,
+            offset=symbol.address,
+            base=RegisterOperand(
+                text="$0",
+                span=operand.span,
+                index=0,
+            ),
+        )
+
+    def _require_code_label(self, operand: LabelRefOperand, line_no: int) -> None:
+        symbol = self._typed_symbols.get(operand.name)
+        if symbol is None:
+            self._diagnostics.add_line_error(
+                line_no,
+                "S004",
+                f"Undefined label: '{operand.original}'",
+                operand.span,
+            )
+            return
+
+        if symbol.kind is SymbolKind.DATA:
+            self._diagnostics.add_line_error(
+                line_no,
+                "S008",
+                f"Data label '{operand.original}' cannot be used as a code target",
+                operand.span,
+            )
+
+    def _define_symbol(
+        self,
+        name: str,
+        *,
+        original: str,
+        span: SourceSpan,
+        kind: SymbolKind,
+        address: int,
+    ) -> None:
+        if name in self._typed_symbols:
+            prev_span = self._symbol_spans[name]
+            self._diagnostics.add_error(
+                "S006",
+                f"Duplicate label definition: '{original}'",
+                span,
+                (RelatedInfo("Previous definition", prev_span),),
+            )
+            return
+
+        symbol = TypedSymbol(
+            name=name,
+            kind=kind,
+            address=address,
+            original=original,
+            span=span,
+        )
+        self._typed_symbols[name] = symbol
+        self._symbol_spans[name] = span
+        if kind is SymbolKind.CODE:
+            self._labels[name] = address
+
+    def _define_pending_labels(
+        self,
+        pending_labels: list[LabelDef],
+        *,
+        kind: SymbolKind,
+        address: int,
+    ) -> None:
+        for label in pending_labels:
+            self._define_symbol(
+                label.name,
+                original=label.original,
+                span=label.span,
+                kind=kind,
+                address=address,
+            )
+
+    def _allocate_dw_words(
+        self, line_no: int, directive: DirectiveNode, start_addr: int
+    ) -> int:
+        data_addr = start_addr
+        for value in directive.values:
+            if data_addr >= self._mem_size:
+                self._diagnostics.add_line_error(
+                    line_no,
+                    "M002",
+                    f"DW allocation address {data_addr} (0x{data_addr:04X}) is out of bounds (mem_size={self._mem_size})",
+                    directive.span,
+                )
+            normalized = word(value)
+            if normalized != value:
+                self._diagnostics.add_line_warning(
+                    line_no,
+                    "I002",
+                    f"DW initializer {value} will be stored as 16-bit word {normalized} (0x{normalized:04X})",
+                    directive.span,
+                )
+            if data_addr < self._mem_size:
+                self._initial_data_image.append(
+                    DataImageWord(
+                        address=data_addr,
+                        value=normalized,
+                        source_line=line_no,
+                    )
+                )
+            data_addr += 1
+        return data_addr
 
     def _check_operand_spec(self, inst: InstructionNode, line_no: int) -> None:
         if inst.opcode is None:
@@ -154,14 +371,16 @@ class Analyzer:
             )
             return
 
-        for i, (operand, expected_type) in enumerate(zip(inst.operands, expected_types)):
+        for i, (operand, expected_type) in enumerate(
+            zip(inst.operands, expected_types)
+        ):
             if isinstance(expected_type, tuple):
                 if not isinstance(operand, expected_type):
                     type_names = " or ".join(t.__name__ for t in expected_type)
                     self._diagnostics.add_line_error(
                         line_no,
                         "S003",
-                        f"Operand {i+1} of '{inst.opcode.name}' must be of type {type_names}.",
+                        f"Operand {i + 1} of '{inst.opcode.name}' must be of type {type_names}.",
                         operand.span,
                     )
             else:
@@ -169,12 +388,14 @@ class Analyzer:
                     self._diagnostics.add_line_error(
                         line_no,
                         "S003",
-                        f"Operand {i+1} of '{inst.opcode.name}' must be of type {expected_type.__name__}.",
+                        f"Operand {i + 1} of '{inst.opcode.name}' must be of type {expected_type.__name__}.",
                         operand.span,
                     )
 
-    def _check_register_bounds(self, inst: InstructionNode, line_no: int) -> None:
-        for operand in inst.operands:
+    def _check_register_bounds(
+        self, operands: tuple[Operand, ...], line_no: int
+    ) -> None:
+        for operand in operands:
             if isinstance(operand, RegisterOperand):
                 if operand.index < 0 or operand.index >= self._reg_count:
                     self._diagnostics.add_line_error(
@@ -192,22 +413,13 @@ class Analyzer:
                         operand.base.span,
                     )
 
-    def _check_label_refs(self, inst: InstructionNode, line_no: int) -> None:
-        for operand in inst.operands:
-            if isinstance(operand, LabelRefOperand):
-                if operand.name not in self._labels:
-                    self._diagnostics.add_line_error(
-                        line_no,
-                        "S004",
-                        f"Undefined label: '{operand.original}'",
-                        operand.span,
-                    )
-
-    def _check_branch_target_range(self, inst: InstructionNode, line_no: int) -> None:
-        if inst.opcode not in (Opcode.BZ, Opcode.BAL):
+    def _check_branch_target_range(
+        self, opcode: Opcode, operands: tuple[Operand, ...], line_no: int
+    ) -> None:
+        if opcode not in (Opcode.BZ, Opcode.BAL):
             return
 
-        for operand in inst.operands:
+        for operand in operands:
             if not isinstance(operand, LabelRefOperand):
                 continue
 
@@ -225,11 +437,13 @@ class Analyzer:
                     operand.span,
                 )
 
-    def _check_memory_bounds(self, inst: InstructionNode, line_no: int) -> None:
-        if inst.opcode not in (Opcode.LD, Opcode.ST):
+    def _check_memory_bounds(
+        self, opcode: Opcode, operands: tuple[Operand, ...], line_no: int
+    ) -> None:
+        if opcode not in (Opcode.LD, Opcode.ST):
             return
 
-        for operand in inst.operands:
+        for operand in operands:
             if not isinstance(operand, AddressOperand):
                 continue
 
@@ -247,15 +461,17 @@ class Analyzer:
                     operand.span,
                 )
 
-    def _check_immediate_range(self, inst: InstructionNode, line_no: int) -> None:
-        if inst.opcode in (Opcode.BZ,):
+    def _check_immediate_range(
+        self, opcode: Opcode, operands: tuple[Operand, ...], line_no: int
+    ) -> None:
+        if opcode in (Opcode.BZ,):
             return
 
-        if inst.opcode == Opcode.BAL:
-            if len(inst.operands) >= 2 and isinstance(inst.operands[1], LabelRefOperand):
+        if opcode == Opcode.BAL:
+            if len(operands) >= 2 and isinstance(operands[1], LabelRefOperand):
                 return
 
-        for operand in inst.operands:
+        for operand in operands:
             if not isinstance(operand, AddressOperand):
                 continue
 

@@ -59,6 +59,8 @@ Parses and analyzes the source program.
 - `mem_size`: The memory size used for static analysis.
 - `cfg`: The control-flow graph (when static checks are enabled).
 - `dataflow`: Dataflow analysis result (when static checks are enabled).
+- `typed_symbols`: A dictionary mapping label names to `TypedSymbol` objects, containing domain (CODE/DATA) and address information.
+- `initial_data_image`: A tuple of `DataImageWord` objects representing the initial DMEM state preloaded from `DW` directives.
 
 **Helper methods:**
 - `has_errors()`: Returns `True` if any error diagnostics exist.
@@ -89,6 +91,7 @@ Creates a simulator from an existing `CompileResult`.
 
 - Raises `ValueError` if the result contains errors or has no IR.
 - Uses `result.reg_count` to configure the simulator's register count.
+- **Preloads DMEM** with initial data images from `DW` directives if present.
 
 ### `SNXSimulator.from_source`
 
