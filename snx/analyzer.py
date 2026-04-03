@@ -237,15 +237,15 @@ class Analyzer:
             )
             return operand
 
-        if not IMM8_MIN_SIGNED <= symbol.address <= IMM8_MAX_SIGNED:
+        wrapped_address = normalize_imm8(symbol.address)
+        if word(wrapped_address) != symbol.address:
             self._diagnostics.add_line_error(
                 line_no,
                 "S009",
-                (
-                    f"Data label '{operand.original}' at address {symbol.address} cannot be used "
-                    f"as a bare absolute address; SN/X I-type immediates are limited to "
-                    f"{IMM8_MIN_SIGNED}..{IMM8_MAX_SIGNED}"
-                ),
+                f"Data label '{operand.original}' at address {symbol.address} cannot be used "
+                + "as a bare absolute address; SN/X I-type immediates can only encode "
+                + f"$0-based addresses 0..{IMM8_MAX_SIGNED} and "
+                + f"{word(IMM8_MIN_SIGNED)}..{word(-1)} without changing the effective address",
                 operand.span,
             )
             return operand
@@ -253,7 +253,7 @@ class Analyzer:
         return AddressOperand(
             text=operand.text,
             span=operand.span,
-            offset=symbol.address,
+            offset=wrapped_address,
             base=RegisterOperand(
                 text="$0",
                 span=operand.span,

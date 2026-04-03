@@ -19,11 +19,11 @@ Static analysis is integrated into the compiler and runs by default when you cal
 
 `IRProgram.labels` remains the code-label map used for branch encoding, while the analyzer tracks both CODE and DATA labels in its typed symbol table. Bare labels are accepted only in operand positions that explicitly support them:
 
-- `LD`, `ST`, and `LDA` accept bare DATA labels in their address operand and lower them to absolute `$0`-based addresses.
+- `LD`, `ST`, and `LDA` accept bare DATA labels in their address operand and lower them to `$0`-based signed-imm8 addresses that preserve the same effective 16-bit address.
 - `BZ` and label-form `BAL` require bare CODE labels.
 - Numeric address operands keep their existing behavior unchanged.
 
-Bare DATA labels in `LD`/`ST`/`LDA` must also fit the signed 8-bit I-type immediate range (`-128..127`) after lowering to a `$0`-based absolute address. If the resolved DATA address falls outside that range, compilation fails instead of silently wrapping the effective address.
+Bare DATA labels in `LD`/`ST`/`LDA` must also be exactly representable by SN/X's `$0`-based signed 8-bit I-type semantics. If the resolved DATA address would change after signed-imm8 encoding, compilation fails instead of silently wrapping the effective address.
 
 Using a CODE label (an instruction label) where a DATA address is required (e.g., in `LD $1, main`) is a compile-time error.
 
@@ -33,7 +33,7 @@ Using a DATA label (a `DW` label) where a CODE target is required (e.g., in `BZ 
 
 **Error code:** `S008`
 
-Using a bare DATA label in `LD`/`ST`/`LDA` when its resolved absolute DMEM address cannot be encoded in the SN/X signed 8-bit I-type immediate field is a compile-time error.
+Using a bare DATA label in `LD`/`ST`/`LDA` when its resolved absolute DMEM address cannot be encoded through SN/X's `$0`-based signed 8-bit I-type semantics without changing the effective 16-bit address is a compile-time error. In practice, bare data labels are accepted only for addresses `0..127` and `65408..65535`.
 
 **Error code:** `S009`
 
@@ -86,7 +86,7 @@ Tracks initialization state of registers/memory and return-address usage to dete
 | M002 | Error | DW allocation address exceeds configured `mem_size` |
 | S007 | Error | CODE label used in a DATA-address operand context |
 | S008 | Error | DATA label used in a CODE-target operand context |
-| S009 | Error | Bare DATA label address exceeds the signed 8-bit I-type range |
+| S009 | Error | Bare DATA label address is not representable by a `$0`-based signed 8-bit I-type immediate |
 | P007 | Error | DW requires one or more decimal integer initializers |
 | I001 | Warning | Immediate value truncated to 8 bits |
 | I002 | Warning | DW initializer normalized to the 16-bit word model |

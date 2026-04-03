@@ -1,4 +1,10 @@
-from snx import DataImageWord, SymbolKind, analyze_dataflow, compile_program
+from snx import (
+    DataImageWord,
+    SNXSimulator,
+    SymbolKind,
+    analyze_dataflow,
+    compile_program,
+)
 from snx.ast import AddressOperand, IRProgram, InstructionIR, Opcode, RegisterOperand
 from snx.diagnostics import SourceSpan
 
@@ -264,8 +270,105 @@ def test_data_label_outside_imm8_absolute_range_reports_s009() -> None:
     assert [diag.code for diag in result.diagnostics] == ["S009"]
     assert result.diagnostics[0].message == (
         "Data label 'table' at address 130 cannot be used as a bare absolute "
-        "address; SN/X I-type immediates are limited to -128..127"
+        "address; SN/X I-type immediates can only encode $0-based addresses "
+        "0..127 and 65408..65535 without changing the effective address"
     )
+
+
+def test_high_wrapped_data_label_is_lowered_to_wrapped_imm8_and_runs() -> None:
+    source = "".join(
+        (
+            "main:\n",
+            "    LD $1, table\n",
+            "    OUT $1\n",
+            "    HLT\n",
+            "\n".join(f"d{i}: DW {i}" for i in range(65408)),
+            "\ntable: DW 999\n",
+        )
+    )
+
+    result = compile_program(source, mem_size=65536)
+
+    assert not result.has_errors()
+    assert [diag.code for diag in result.diagnostics] == []
+    assert result.ir is not None
+    operand = result.ir.instructions[0].operands[1]
+    assert isinstance(operand, AddressOperand)
+    assert operand.offset == -128
+    assert operand.base.index == 0
+
+    sim = SNXSimulator.from_compile_result(result, mem_size=65536)
+    sim.run()
+    assert sim.get_output_buffer() == [999]
+
+
+def test_high_wrapped_lda_label_loads_absolute_address_without_i001() -> None:
+    source = "".join(
+        (
+            "main:\n",
+            "    LDA $1, table\n",
+            "    HLT\n",
+            "\n".join(f"d{i}: DW {i}" for i in range(65408)),
+            "\ntable: DW 999\n",
+        )
+    )
+
+    result = compile_program(source, mem_size=65536)
+
+    assert not result.has_errors()
+    assert [diag.code for diag in result.diagnostics] == []
+
+    sim = SNXSimulator.from_compile_result(result, mem_size=65536)
+    sim.run()
+
+    assert sim.regs[1] == 65408
+
+
+def test_high_wrapped_st_label_writes_to_wrapped_high_address() -> None:
+    source = "".join(
+        (
+            "main:\n",
+            "    LDA $1, 99($0)\n",
+            "    ST $1, table\n",
+            "    HLT\n",
+            "\n".join(f"d{i}: DW {i}" for i in range(65408)),
+            "\ntable: DW 7\n",
+        )
+    )
+
+    result = compile_program(source, mem_size=65536)
+
+    assert not result.has_errors()
+    assert [diag.code for diag in result.diagnostics] == []
+
+    sim = SNXSimulator.from_compile_result(result, mem_size=65536)
+    assert sim.memory[65408] == 7
+
+    sim.run()
+
+    assert sim.memory[65408] == 99
+
+
+def test_label_at_65535_lowers_to_negative_one_offset() -> None:
+    source = "".join(
+        (
+            "main:\n",
+            "    LD $1, table\n",
+            "    HLT\n",
+            "\n".join(f"d{i}: DW {i}" for i in range(65535)),
+            "\ntable: DW 999\n",
+        )
+    )
+
+    result = compile_program(source, mem_size=65536)
+
+    assert not result.has_errors()
+    assert [diag.code for diag in result.diagnostics] == []
+    assert result.ir is not None
+    operand = result.ir.instructions[0].operands[1]
+    assert isinstance(operand, AddressOperand)
+    assert operand.offset == -1
+    assert operand.base.index == 0
 
 
 def test_branch_to_data_label_reports_s008() -> None:

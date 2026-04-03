@@ -85,9 +85,9 @@ The following context-free grammar (CFG), written in BNF, defines the concrete s
 - `DW` defines one or more 16-bit data words in DMEM. It accepts decimal integer literals written with the same optional-sign `NUMBER` syntax as the rest of the language. Any initializer already representable as a single 16-bit word (`-32768..65535`) is stored without `I002`; values outside that range are normalized modulo 16 bits with warning `I002`.
 - A label on a `DW` line binds to the first allocated data address for that line.
 - `DW` is DMEM-only. Source-order allocation starts at address 0 and is preloaded into the simulator memory before execution.
-- Bare identifiers are domain-sensitive: `LD`, `ST`, and `LDA` accept bare DATA labels in their address slot and lower them to absolute `$0`-based addresses when the resolved DMEM address fits the signed 8-bit I-type immediate range (`-128..127`); `BZ` and label-form `BAL` accept bare CODE labels only.
+- Bare identifiers are domain-sensitive: `LD`, `ST`, and `LDA` accept bare DATA labels in their address slot and lower them to `$0`-based addresses when the resolved DMEM address is representable by SN/X's signed 8-bit I-type immediate semantics without changing the effective 16-bit address (that is, addresses `0..127` and `65408..65535`); `BZ` and label-form `BAL` accept bare CODE labels only.
 - Bare DATA labels are not general-purpose shorthand for all address-like operands. In particular, `BAL $r, DATA_LABEL` is rejected instead of being reinterpreted as a data jump.
-- Bare DATA labels beyond the signed 8-bit I-type range are rejected at compile time (`S009`) instead of silently wrapping to a different address.
+- Bare DATA labels whose resolved DMEM address would change under `$0`-based signed-imm8 encoding are rejected at compile time (`S009`) instead of silently assembling to a different address.
 - Typed Label Example:
   ```asm
   main:
