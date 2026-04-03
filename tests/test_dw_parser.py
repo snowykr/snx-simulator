@@ -63,3 +63,15 @@ def test_dw_rejects_hex_literal_in_v1() -> None:
     line = result.program.lines[0]
     assert line.instruction is None
     assert line.directive is None
+
+
+def test_rejects_label_with_parenthesized_suffix() -> None:
+    result = parse("LD $1, table($2)\n")
+
+    assert result.program is not None
+    assert [d.code for d in result.diagnostics] == ["P003"]
+    assert result.diagnostics[0].message == "Unexpected token: '('"
+
+    line = result.program.lines[0]
+    assert line.instruction is not None
+    assert line.directive is None

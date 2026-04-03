@@ -232,6 +232,25 @@ main:
     assert operand.base.index == 0
 
 
+def test_st_accepts_data_label_as_absolute_address() -> None:
+    source = """
+pad: DW 11
+table: DW 22
+main:
+    ST $1, table
+    HLT
+"""
+
+    result = compile_program(source, run_static_checks=False)
+
+    assert not result.has_errors()
+    assert result.ir is not None
+    operand = result.ir.instructions[0].operands[1]
+    assert isinstance(operand, AddressOperand)
+    assert operand.offset == 1
+    assert operand.base.index == 0
+
+
 def test_data_label_outside_imm8_absolute_range_reports_s009() -> None:
     source = "main:\n    LD $1, table\n    HLT\n"
     source += "\n".join(f"d{i}: DW {i}" for i in range(130))
@@ -300,6 +319,23 @@ main:
     assert result.diagnostics[0].message == (
         "Data label 'table' cannot be used as a code target"
     )
+
+
+def test_ld_st_lda_reject_label_with_parenthesized_suffix() -> None:
+    for opcode in ("LD", "ST", "LDA"):
+        source = f"""
+table: DW 1
+main:
+    {opcode} $1, table($2)
+    HLT
+"""
+
+        result = compile_program(source, run_static_checks=False)
+
+        assert result.has_errors()
+        assert result.ir is None
+        assert [diag.code for diag in result.diagnostics] == ["P003"]
+        assert result.diagnostics[0].message == "Unexpected token: '('"
 
 
 def test_malformed_split_line_dw_reports_only_p007() -> None:

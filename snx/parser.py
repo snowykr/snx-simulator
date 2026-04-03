@@ -115,6 +115,19 @@ class Parser:
         elif self._check(TokenKind.IDENT):
             instruction = self._parse_instruction()
 
+        if (
+            instruction is not None
+            and not self._check(TokenKind.EOL)
+            and not self._check(TokenKind.EOF)
+        ):
+            tok = self._current()
+            self._diagnostics.add_line_error(
+                tok.line,
+                "P003",
+                f"Unexpected token: '{tok.lexeme}'",
+                tok.span,
+            )
+
         while not self._check(TokenKind.EOL) and not self._check(TokenKind.EOF):
             self._advance()
 
