@@ -14,7 +14,7 @@ from snx.ast import (
 )
 from snx.cfg import CFG, build_cfg
 from snx.constants import DEFAULT_REG_COUNT
-from snx.word import normalize_imm8
+from snx.word import normalize_imm8, word
 
 if TYPE_CHECKING:
     pass
@@ -340,7 +340,7 @@ class DataflowAnalyzer:
         if addr_op.base.index == 3:
             return state.sp_offset + eff_offset
         elif addr_op.base.index == 0:
-            return 1000 + eff_offset
+            return 1000 + word(eff_offset)
         return None
 
 

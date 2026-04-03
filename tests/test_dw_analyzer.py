@@ -1,5 +1,6 @@
-from snx import SymbolKind, compile_program
-from snx.ast import AddressOperand
+from snx import DataImageWord, SymbolKind, analyze_dataflow, compile_program
+from snx.ast import AddressOperand, IRProgram, InstructionIR, Opcode, RegisterOperand
+from snx.diagnostics import SourceSpan
 
 
 def test_data_label_binds_to_first_allocated_word() -> None:
@@ -355,3 +356,32 @@ main:
     assert result.diagnostics[0].message == (
         "DW requires one or more signed decimal initializers"
     )
+
+
+def test_dataflow_recognizes_dw_seeded_high_address_via_negative_imm8() -> None:
+    span = SourceSpan(start_line=1, start_col=1, end_line=1, end_col=8)
+    ir = IRProgram(
+        instructions=(
+            InstructionIR(
+                opcode=Opcode.LD,
+                operands=(
+                    RegisterOperand(text="$1", span=span, index=1),
+                    AddressOperand(
+                        text="-1($0)",
+                        span=span,
+                        offset=-1,
+                        base=RegisterOperand(text="$0", span=span, index=0),
+                    ),
+                ),
+                text="LD $1, -1($0)",
+                pc=0,
+            ),
+            InstructionIR(opcode=Opcode.HLT, operands=(), text="HLT", pc=1),
+        ),
+        labels={"main": 0},
+        initial_data_image=(DataImageWord(address=65535, value=999, source_line=1),),
+    )
+
+    result = analyze_dataflow(ir)
+
+    assert [issue.code for issue in result.issues] == []
