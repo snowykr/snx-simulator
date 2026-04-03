@@ -1,5 +1,5 @@
 import subprocess
-from pathlib import Path
+import sys
 
 
 def test_cli_executes_program_with_dw_data(tmp_path):
@@ -10,7 +10,7 @@ def test_cli_executes_program_with_dw_data(tmp_path):
     )
 
     result = subprocess.run(
-        ["python", "-m", "snx.cli", str(asm_file)],
+        [sys.executable, "-m", "snx.cli", str(asm_file)],
         capture_output=True,
         text=True,
         check=True,
@@ -29,7 +29,9 @@ def test_cli_reports_cross_domain_label_error_for_dw_program(tmp_path):
     )
 
     result = subprocess.run(
-        ["python", "-m", "snx.cli", str(asm_file)], capture_output=True, text=True
+        [sys.executable, "-m", "snx.cli", str(asm_file)],
+        capture_output=True,
+        text=True,
     )
 
     assert result.returncode == 1
@@ -43,7 +45,9 @@ def test_cli_reports_code_label_as_data_error(tmp_path):
     asm_file.write_text("main:\n    LD $1, main\n    HLT", encoding="utf-8")
 
     result = subprocess.run(
-        ["python", "-m", "snx.cli", str(asm_file)], capture_output=True, text=True
+        [sys.executable, "-m", "snx.cli", str(asm_file)],
+        capture_output=True,
+        text=True,
     )
 
     assert result.returncode == 1

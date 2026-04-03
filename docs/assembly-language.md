@@ -82,7 +82,7 @@ The following context-free grammar (CFG), written in BNF, defines the concrete s
 - When `<address-operand>` is written as just `NUMBER` (without parentheses), the base register defaults to `$0`.
 - `<mnemonic>` is matched against the supported opcodes (`ADD`, `AND`, `SUB`, `SLT`, `NOT`, `SR`, `HLT`, `LD`, `ST`, `LDA`, `IN`, `OUT`, `BZ`, `BAL`). Unknown mnemonics produce a diagnostic error.
 - Labels and mnemonics are case-insensitive.
-- `DW` defines one or more 16-bit data words in DMEM. It accepts a list of signed decimal integers.
+- `DW` defines one or more 16-bit data words in DMEM. It accepts decimal integer literals written with the same optional-sign `NUMBER` syntax as the rest of the language. Any initializer already representable as a single 16-bit word (`-32768..65535`) is stored without `I002`; values outside that range are normalized modulo 16 bits with warning `I002`.
 - A label on a `DW` line binds to the first allocated data address for that line.
 - `DW` is DMEM-only. Source-order allocation starts at address 0 and is preloaded into the simulator memory before execution.
 - Bare identifiers are domain-sensitive: `LD`, `ST`, and `LDA` accept bare DATA labels in their address slot and lower them to absolute `$0`-based addresses when the resolved DMEM address fits the signed 8-bit I-type immediate range (`-128..127`); `BZ` and label-form `BAL` accept bare CODE labels only.

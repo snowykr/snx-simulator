@@ -12,7 +12,7 @@ Static analysis is integrated into the compiler and runs by default when you cal
 
 - Unknown instructions
 - Invalid operand counts/types
-- `DW` requires one or more signed decimal initializers (**Error code:** `P007`)
+- `DW` requires one or more decimal integer initializers (**Error code:** `P007`)
 - Register index bounds
 - Undefined or duplicate labels
 - Domain-sensitive code/data label resolution: Labels are strictly partitioned into CODE (instruction targets) and DATA (DW locations).
@@ -62,7 +62,7 @@ For `DW` initializers, the analyzer uses a separate data-address counter that st
 
 **Error code:** `M002`
 
-If a `DW` initializer does not fit the 16-bit word model, it is normalized modulo 16 bits and reported as a warning.
+If a `DW` initializer does not fit the 16-bit word model (that is, it falls outside the non-truncating `-32768..65535` range), it is normalized modulo 16 bits and reported as a warning.
 
 **Warning code:** `I002`
 
@@ -87,7 +87,7 @@ Tracks initialization state of registers/memory and return-address usage to dete
 | S007 | Error | CODE label used in a DATA-address operand context |
 | S008 | Error | DATA label used in a CODE-target operand context |
 | S009 | Error | Bare DATA label address exceeds the signed 8-bit I-type range |
-| P007 | Error | DW requires one or more signed decimal initializers |
+| P007 | Error | DW requires one or more decimal integer initializers |
 | I001 | Warning | Immediate value truncated to 8 bits |
 | I002 | Warning | DW initializer normalized to the 16-bit word model |
 | B001 | Warning | Branch target exceeds 10-bit limit |

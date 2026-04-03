@@ -21,7 +21,14 @@ from snx.ast import (
     TypedSymbol,
 )
 from snx.constants import DEFAULT_MEM_SIZE, DEFAULT_REG_COUNT
-from snx.word import IMM8_MAX_SIGNED, IMM8_MIN_SIGNED, WORD_MASK, normalize_imm8, word
+from snx.word import (
+    IMM8_MAX_SIGNED,
+    IMM8_MIN_SIGNED,
+    WORD_MASK,
+    WORD_MIN_SIGNED,
+    normalize_imm8,
+    word,
+)
 from snx.diagnostics import Diagnostic, DiagnosticCollector, RelatedInfo, SourceSpan
 
 if TYPE_CHECKING:
@@ -333,7 +340,7 @@ class Analyzer:
                     directive.span,
                 )
             normalized = word(value)
-            if normalized != value:
+            if value < WORD_MIN_SIGNED or value > WORD_MASK:
                 self._diagnostics.add_line_warning(
                     line_no,
                     "I002",

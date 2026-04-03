@@ -9,7 +9,7 @@ main:
     HLT
 """
 
-    result = compile_program(source, run_static_checks=False)
+    result = compile_program(source)
 
     assert not result.has_errors()
     assert result.ir is not None
@@ -86,7 +86,7 @@ main:
     HLT
 """
 
-    result = compile_program(source, mem_size=4, run_static_checks=False)
+    result = compile_program(source, mem_size=4)
 
     assert not result.has_errors()
 

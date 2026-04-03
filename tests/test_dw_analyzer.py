@@ -106,6 +106,47 @@ main:
     assert result.initial_data_image[0].value == 0
 
 
+def test_signed_dw_values_in_16bit_range_do_not_report_i002() -> None:
+    for value, expected_word in (
+        (-32768, 0x8000),
+        (-1, 0xFFFF),
+        (32768, 0x8000),
+        (65535, 0xFFFF),
+    ):
+        source = f"""
+table: DW {value}
+main:
+    HLT
+"""
+
+        result = compile_program(source, run_static_checks=False)
+
+        assert not result.has_errors()
+        assert result.ir is not None
+        assert [diag.code for diag in result.diagnostics] == []
+        assert result.initial_data_image[0].value == expected_word
+
+
+def test_dw_signed_underflow_reports_i002() -> None:
+    source = """
+table: DW -32769
+main:
+    HLT
+"""
+
+    result = compile_program(source, run_static_checks=False)
+
+    assert not result.has_errors()
+    assert result.ir is not None
+    i002 = [diag for diag in result.diagnostics if diag.code == "I002"]
+    assert len(i002) == 1
+    assert (
+        i002[0].message
+        == "DW initializer -32769 will be stored as 16-bit word 32767 (0x7FFF)"
+    )
+    assert result.initial_data_image[0].value == 0x7FFF
+
+
 def test_ld_accepts_data_label_as_absolute_address() -> None:
     source = """
 table: DW 7
