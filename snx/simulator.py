@@ -50,9 +50,11 @@ class SNXSimulator:
         self._ir_program = ir_program
         self._instructions = ir_program.instructions
         self._labels = ir_program.labels
-
         self._current_pc: int = 0
         self._current_inst_text: str = ""
+
+        for data_word in ir_program.initial_data_image:
+            self._set_mem(data_word.address, data_word.value)
 
     @classmethod
     def from_compile_result(
@@ -112,7 +114,7 @@ class SNXSimulator:
     def labels(self) -> dict[str, int]:
         return self._labels
 
-    def get_state(self) -> dict:
+    def get_state(self) -> dict[str, int | list[int] | bool]:
         return {
             "pc": self.pc,
             "regs": list(self.regs),
@@ -192,14 +194,18 @@ class SNXSimulator:
         if op == Opcode.LDA:
             dest = operands[0]
             addr_op = operands[1]
-            if isinstance(dest, RegisterOperand) and isinstance(addr_op, AddressOperand):
+            if isinstance(dest, RegisterOperand) and isinstance(
+                addr_op, AddressOperand
+            ):
                 addr = self._calc_effective_addr(addr_op)
                 self._set_reg(dest.index, addr)
 
         elif op == Opcode.LD:
             dest = operands[0]
             addr_op = operands[1]
-            if isinstance(dest, RegisterOperand) and isinstance(addr_op, AddressOperand):
+            if isinstance(dest, RegisterOperand) and isinstance(
+                addr_op, AddressOperand
+            ):
                 addr = self._calc_effective_addr(addr_op)
                 self._set_reg(dest.index, self._load_mem(addr))
 
@@ -212,22 +218,38 @@ class SNXSimulator:
 
         elif op == Opcode.ADD:
             rd, rsa, rsb = operands[0], operands[1], operands[2]
-            if isinstance(rd, RegisterOperand) and isinstance(rsa, RegisterOperand) and isinstance(rsb, RegisterOperand):
+            if (
+                isinstance(rd, RegisterOperand)
+                and isinstance(rsa, RegisterOperand)
+                and isinstance(rsb, RegisterOperand)
+            ):
                 self._set_reg(rd.index, self.regs[rsa.index] + self.regs[rsb.index])
 
         elif op == Opcode.AND:
             rd, rsa, rsb = operands[0], operands[1], operands[2]
-            if isinstance(rd, RegisterOperand) and isinstance(rsa, RegisterOperand) and isinstance(rsb, RegisterOperand):
+            if (
+                isinstance(rd, RegisterOperand)
+                and isinstance(rsa, RegisterOperand)
+                and isinstance(rsb, RegisterOperand)
+            ):
                 self._set_reg(rd.index, self.regs[rsa.index] & self.regs[rsb.index])
 
         elif op == Opcode.SUB:
             rd, rsa, rsb = operands[0], operands[1], operands[2]
-            if isinstance(rd, RegisterOperand) and isinstance(rsa, RegisterOperand) and isinstance(rsb, RegisterOperand):
+            if (
+                isinstance(rd, RegisterOperand)
+                and isinstance(rsa, RegisterOperand)
+                and isinstance(rsb, RegisterOperand)
+            ):
                 self._set_reg(rd.index, self.regs[rsa.index] - self.regs[rsb.index])
 
         elif op == Opcode.SLT:
             rd, rsa, rsb = operands[0], operands[1], operands[2]
-            if isinstance(rd, RegisterOperand) and isinstance(rsa, RegisterOperand) and isinstance(rsb, RegisterOperand):
+            if (
+                isinstance(rd, RegisterOperand)
+                and isinstance(rsa, RegisterOperand)
+                and isinstance(rsb, RegisterOperand)
+            ):
                 val_a = signed16(self.regs[rsa.index])
                 val_b = signed16(self.regs[rsb.index])
                 self._set_reg(rd.index, 1 if val_a < val_b else 0)
@@ -255,7 +277,9 @@ class SNXSimulator:
         elif op == Opcode.BZ:
             cond_reg = operands[0]
             label_op = operands[1]
-            if isinstance(cond_reg, RegisterOperand) and isinstance(label_op, LabelRefOperand):
+            if isinstance(cond_reg, RegisterOperand) and isinstance(
+                label_op, LabelRefOperand
+            ):
                 if self.regs[cond_reg.index] == 0:
                     self.pc = self._labels[label_op.name]
 

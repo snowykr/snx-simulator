@@ -1,6 +1,7 @@
 from snx.simulator import SNXSimulator
 from snx.parser import Instruction, parse_code
 from snx.compiler import compile_program, CompileResult
+from snx.ast import DataImageWord, DirectiveKind, DirectiveNode, SymbolKind, TypedSymbol
 from snx.trace import format_trace_header, format_trace_row
 from snx.cfg import CFG, build_cfg
 from snx.dataflow import DataflowResult, analyze_dataflow
@@ -32,6 +33,11 @@ __all__ = [
     "parse_code",
     "compile_program",
     "CompileResult",
+    "DirectiveKind",
+    "DirectiveNode",
+    "SymbolKind",
+    "TypedSymbol",
+    "DataImageWord",
     "format_trace_header",
     "format_trace_row",
     "CFG",

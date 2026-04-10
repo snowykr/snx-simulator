@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import TYPE_CHECKING
 
@@ -30,6 +30,15 @@ class Opcode(Enum):
             return cls[s.upper()]
         except KeyError:
             return None
+
+
+class DirectiveKind(Enum):
+    DW = auto()
+
+
+class SymbolKind(Enum):
+    CODE = auto()
+    DATA = auto()
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,11 +87,43 @@ class InstructionNode:
 
 
 @dataclass(frozen=True, slots=True)
+class DirectiveNode:
+    kind: DirectiveKind
+    keyword: str
+    values: tuple[int, ...]
+    text: str
+    span: SourceSpan
+
+
+@dataclass(frozen=True, slots=True)
+class TypedSymbol:
+    name: str
+    kind: SymbolKind
+    address: int
+    original: str | None = None
+    span: SourceSpan | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class DataImageWord:
+    address: int
+    value: int
+    source_line: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class Line:
     line_no: int
     label: LabelDef | None
     instruction: InstructionNode | None
     raw: str
+    directive: DirectiveNode | None = None
+
+    @property
+    def content(self) -> InstructionNode | DirectiveNode | None:
+        if self.directive is not None:
+            return self.directive
+        return self.instruction
 
 
 @dataclass(frozen=True, slots=True)
@@ -102,3 +143,5 @@ class InstructionIR:
 class IRProgram:
     instructions: tuple[InstructionIR, ...]
     labels: dict[str, int]
+    typed_symbols: dict[str, TypedSymbol] = field(default_factory=dict)
+    initial_data_image: tuple[DataImageWord, ...] = ()

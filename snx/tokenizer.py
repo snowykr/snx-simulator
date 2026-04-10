@@ -31,6 +31,9 @@ class Token:
         end_col = self.column + len(self.lexeme)
         return SourceSpan(self.line, self.column, self.line, end_col)
 
+    def matches_ident(self, value: str) -> bool:
+        return self.kind is TokenKind.IDENT and self.normalized == value.upper()
+
 
 class Tokenizer:
     def __init__(self, source: str, diagnostics: DiagnosticCollector) -> None:
